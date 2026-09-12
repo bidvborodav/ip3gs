@@ -1,0 +1,28 @@
+name: ip3gs
+options:
+  bundleIdPrefix: com.borodavchuk.ip3gs
+  deploymentTarget:
+    macOS: "13.0"
+
+settings:
+  base:
+    MACOSX_DEPLOYMENT_TARGET: "13.0"
+    GENERATE_INFOPLIST_FILE: YES
+
+targets:
+  ip3gs:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/ip3gs
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.borodavchuk.ip3gs.app
+        ENABLE_HARDENED_RUNTIME: YES
+  ip3gsTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/ip3gsTests
+    dependencies:
+      - target: ip3gs
