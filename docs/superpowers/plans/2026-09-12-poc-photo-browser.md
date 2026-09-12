@@ -18,6 +18,7 @@
 - Scope: list + thumbnail grid + "Download All" only — no selection, delete, or metadata editing.
 - No modals/alerts — all state surfaces as plain text in a status bar.
 - Platform: macOS 13+, SwiftUI, matching existing `project.yml`.
+- **No TDD.** This is a throwaway-tolerant POC — write the implementation directly, then a single verification pass (a smoke test or a regression test written *after* the code, never before). Skip "write failing test → confirm it fails" cycles entirely; they cost more than they buy at this stage.
 
 ---
 
@@ -127,50 +128,7 @@ git commit -m "feat: add local libimobiledevice vendoring script"
   - `enum DeviceState: Equatable { case notConnected; case untrusted; case connected(udid: String) }`
   - `final class DeviceBridge { init(binDir: String = "Tools/bin", runner: ProcessRunning = SystemProcessRunner()); func checkConnection() -> DeviceState }`
 
-- [ ] **Step 1: Write the failing test**
-
-```swift
-import XCTest
-@testable import ip3gs
-
-private struct FakeRunner: ProcessRunning {
-    let stdout: String
-    let stderr: String
-    let exitCode: Int32
-
-    func run(_ executablePath: String, arguments: [String]) throws -> (stdout: String, stderr: String, exitCode: Int32) {
-        (stdout, stderr, exitCode)
-    }
-}
-
-final class DeviceBridgeConnectionTests: XCTestCase {
-    func testNoDeviceConnected() {
-        let runner = FakeRunner(stdout: "", stderr: "No device found.", exitCode: 1)
-        let bridge = DeviceBridge(binDir: "Tools/bin", runner: runner)
-        XCTAssertEqual(bridge.checkConnection(), .notConnected)
-    }
-
-    func testUntrustedDevice() {
-        let runner = FakeRunner(stdout: "", stderr: "ERROR: Could not connect to lockdownd, error code -18", exitCode: 1)
-        let bridge = DeviceBridge(binDir: "Tools/bin", runner: runner)
-        XCTAssertEqual(bridge.checkConnection(), .untrusted)
-    }
-
-    func testConnectedDevice() {
-        let stdout = "DeviceName: iPhone\nUniqueDeviceID: abc123\nProductVersion: 6.1.6\n"
-        let runner = FakeRunner(stdout: stdout, stderr: "", exitCode: 0)
-        let bridge = DeviceBridge(binDir: "Tools/bin", runner: runner)
-        XCTAssertEqual(bridge.checkConnection(), .connected(udid: "abc123"))
-    }
-}
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `xcodebuild -project ip3gs.xcodeproj -scheme ip3gs -destination 'platform=macOS' test -only-testing:ip3gsTests/DeviceBridgeConnectionTests`
-Expected: FAIL — `ProcessRunning`, `DeviceBridge`, `DeviceState` do not exist yet.
-
-- [ ] **Step 3: Write `ProcessRunning.swift`**
+- [ ] **Step 1: Write `ProcessRunning.swift`**
 
 ```swift
 import Foundation
@@ -205,7 +163,7 @@ struct SystemProcessRunner: ProcessRunning {
 }
 ```
 
-- [ ] **Step 4: Write `DeviceBridge.swift`**
+- [ ] **Step 2: Write `DeviceBridge.swift`**
 
 ```swift
 import Foundation
@@ -249,12 +207,50 @@ final class DeviceBridge {
 }
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [ ] **Step 3: Write a verification test (written after the code, to lock in behavior — not test-first)**
+
+```swift
+import XCTest
+@testable import ip3gs
+
+private struct FakeRunner: ProcessRunning {
+    let stdout: String
+    let stderr: String
+    let exitCode: Int32
+
+    func run(_ executablePath: String, arguments: [String]) throws -> (stdout: String, stderr: String, exitCode: Int32) {
+        (stdout, stderr, exitCode)
+    }
+}
+
+final class DeviceBridgeConnectionTests: XCTestCase {
+    func testNoDeviceConnected() {
+        let runner = FakeRunner(stdout: "", stderr: "No device found.", exitCode: 1)
+        let bridge = DeviceBridge(binDir: "Tools/bin", runner: runner)
+        XCTAssertEqual(bridge.checkConnection(), .notConnected)
+    }
+
+    func testUntrustedDevice() {
+        let runner = FakeRunner(stdout: "", stderr: "ERROR: Could not connect to lockdownd, error code -18", exitCode: 1)
+        let bridge = DeviceBridge(binDir: "Tools/bin", runner: runner)
+        XCTAssertEqual(bridge.checkConnection(), .untrusted)
+    }
+
+    func testConnectedDevice() {
+        let stdout = "DeviceName: iPhone\nUniqueDeviceID: abc123\nProductVersion: 6.1.6\n"
+        let runner = FakeRunner(stdout: stdout, stderr: "", exitCode: 0)
+        let bridge = DeviceBridge(binDir: "Tools/bin", runner: runner)
+        XCTAssertEqual(bridge.checkConnection(), .connected(udid: "abc123"))
+    }
+}
+```
+
+- [ ] **Step 4: Run the test to confirm it passes**
 
 Run: `xcodebuild -project ip3gs.xcodeproj -scheme ip3gs -destination 'platform=macOS' test -only-testing:ip3gsTests/DeviceBridgeConnectionTests`
 Expected: PASS (3 tests)
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add Sources/ip3gs/DeviceBridge/ProcessRunning.swift Sources/ip3gs/DeviceBridge/DeviceBridge.swift Tests/ip3gsTests/DeviceBridgeConnectionTests.swift
@@ -276,7 +272,41 @@ git commit -m "feat: add DeviceBridge connection check"
   - `struct PhotoAsset: Identifiable, Equatable { let id: String; let filename: String; let remotePath: String }` (`id == filename`)
   - `extension DeviceBridge { func listPhotos(udid: String) -> [PhotoAsset] }`
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Write `PhotoAsset.swift`**
+
+```swift
+struct PhotoAsset: Identifiable, Equatable {
+    let id: String
+    let filename: String
+    let remotePath: String
+}
+```
+
+- [ ] **Step 2: Add `listPhotos(udid:)` to `DeviceBridge.swift`**
+
+```swift
+extension DeviceBridge {
+    private static let dcimPath = "/DCIM/100APPLE"
+
+    func listPhotos(udid: String) -> [PhotoAsset] {
+        guard let result = try? runner.run("\(binDir)/afcclient", arguments: ["-u", udid, "ls", Self.dcimPath]) else {
+            return []
+        }
+
+        return result.stdout
+            .split(separator: "\n")
+            .map { String($0) }
+            .filter { !$0.isEmpty }
+            .map { filename in
+                PhotoAsset(id: filename, filename: filename, remotePath: "\(Self.dcimPath)/\(filename)")
+            }
+    }
+}
+```
+
+> Note: `binDir` and `runner` are `private` in Task 2 — change both to `private` → `fileprivate` (or keep `private` and put this extension in the same file) so this extension can reach them. Since this task modifies `DeviceBridge.swift` directly rather than adding a new file, just add the method inside the existing `final class DeviceBridge { ... }` body instead of a separate `extension`.
+
+- [ ] **Step 3: Write a verification test (after the code)**
 
 ```swift
 import XCTest
@@ -312,51 +342,12 @@ final class DeviceBridgeListPhotosTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `xcodebuild -project ip3gs.xcodeproj -scheme ip3gs -destination 'platform=macOS' test -only-testing:ip3gsTests/DeviceBridgeListPhotosTests`
-Expected: FAIL — `PhotoAsset` and `listPhotos` do not exist yet.
-
-- [ ] **Step 3: Write `PhotoAsset.swift`**
-
-```swift
-struct PhotoAsset: Identifiable, Equatable {
-    let id: String
-    let filename: String
-    let remotePath: String
-}
-```
-
-- [ ] **Step 4: Add `listPhotos(udid:)` to `DeviceBridge.swift`**
-
-```swift
-extension DeviceBridge {
-    private static let dcimPath = "/DCIM/100APPLE"
-
-    func listPhotos(udid: String) -> [PhotoAsset] {
-        guard let result = try? runner.run("\(binDir)/afcclient", arguments: ["-u", udid, "ls", Self.dcimPath]) else {
-            return []
-        }
-
-        return result.stdout
-            .split(separator: "\n")
-            .map { String($0) }
-            .filter { !$0.isEmpty }
-            .map { filename in
-                PhotoAsset(id: filename, filename: filename, remotePath: "\(Self.dcimPath)/\(filename)")
-            }
-    }
-}
-```
-
-> Note: `binDir` and `runner` are `private` in Task 2 — change both to `private` → `fileprivate` (or keep `private` and put this extension in the same file) so this extension can reach them. Since this task modifies `DeviceBridge.swift` directly rather than adding a new file, just add the method inside the existing `final class DeviceBridge { ... }` body instead of a separate `extension`.
-
-- [ ] **Step 5: Run test to verify it passes**
+- [ ] **Step 4: Run the test to confirm it passes**
 
 Run: `xcodebuild -project ip3gs.xcodeproj -scheme ip3gs -destination 'platform=macOS' test -only-testing:ip3gsTests/DeviceBridgeListPhotosTests`
 Expected: PASS (2 tests)
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add Sources/ip3gs/DeviceBridge/PhotoAsset.swift Sources/ip3gs/DeviceBridge/DeviceBridge.swift Tests/ip3gsTests/DeviceBridgeListPhotosTests.swift
@@ -377,21 +368,37 @@ git commit -m "feat: add DeviceBridge photo listing"
   - `func downloadThumbnail(_ asset: PhotoAsset) -> Data?`
   - `func download(_ asset: PhotoAsset, to directory: URL) -> Bool` (returns success/failure, never throws — callers decide how to surface failure)
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Add `downloadThumbnail` and `download(to:)` to `DeviceBridge.swift`**
+
+```swift
+func downloadThumbnail(_ asset: PhotoAsset) -> Data? {
+    guard let result = try? runner.run("\(binDir)/afcclient", arguments: ["-u", "", "get", asset.remotePath, "-"]),
+          result.exitCode == 0 else {
+        return nil
+    }
+    return result.stdout.data(using: .utf8)
+}
+
+func download(_ asset: PhotoAsset, to directory: URL) -> Bool {
+    guard let data = downloadThumbnail(asset) else {
+        return false
+    }
+    let destination = directory.appendingPathComponent(asset.filename)
+    return (try? data.write(to: destination)) != nil
+}
+```
+
+> Note: this reuses `downloadThumbnail` for the full-resolution pull in the POC — there is no separate thumbnail-vs-full-size distinction on the device side yet (that would need real on-device JPEG downsampling, out of scope per the spec's "Out of Scope" section). `download(to:)` and `downloadThumbnail` differ only in destination (disk vs. in-memory `Data`), matching the Data-axis split in the story map.
+
+- [ ] **Step 2: Write a verification test (after the code)**
 
 ```swift
 import XCTest
 @testable import ip3gs
 
 private struct FakeRunner: ProcessRunning {
-    var stdoutData: String = "fake-image-bytes"
-    var exitCode: Int32 = 0
-    private(set) var lastArguments: [String] = []
-
-    mutating func run(_ executablePath: String, arguments: [String]) throws -> (stdout: String, stderr: String, exitCode: Int32) {
-        lastArguments = arguments
-        return (stdoutData, "", exitCode)
-    }
+    let stdoutData: String
+    let exitCode: Int32
 
     func run(_ executablePath: String, arguments: [String]) throws -> (stdout: String, stderr: String, exitCode: Int32) {
         (stdoutData, "", exitCode)
@@ -434,41 +441,12 @@ final class DeviceBridgeDownloadTests: XCTestCase {
 }
 ```
 
-> Note: drop the `mutating func run` / duplicate overload above — `ProcessRunning.run` is non-mutating in Task 2's protocol. Use only the single non-mutating `run` method shown for `testDownloadThumbnailReturnsData` etc.; `FakeRunner` here is a plain `struct` with `let stdoutData: String` and `let exitCode: Int32`, matching Task 2/3's fakes.
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `xcodebuild -project ip3gs.xcodeproj -scheme ip3gs -destination 'platform=macOS' test -only-testing:ip3gsTests/DeviceBridgeDownloadTests`
-Expected: FAIL — `downloadThumbnail` and `download(_:to:)` do not exist yet.
-
-- [ ] **Step 3: Add `downloadThumbnail` and `download(to:)` to `DeviceBridge.swift`**
-
-```swift
-func downloadThumbnail(_ asset: PhotoAsset) -> Data? {
-    guard let result = try? runner.run("\(binDir)/afcclient", arguments: ["-u", "", "get", asset.remotePath, "-"]),
-          result.exitCode == 0 else {
-        return nil
-    }
-    return result.stdout.data(using: .utf8)
-}
-
-func download(_ asset: PhotoAsset, to directory: URL) -> Bool {
-    guard let data = downloadThumbnail(asset) else {
-        return false
-    }
-    let destination = directory.appendingPathComponent(asset.filename)
-    return (try? data.write(to: destination)) != nil
-}
-```
-
-> Note: this reuses `downloadThumbnail` for the full-resolution pull in the POC — there is no separate thumbnail-vs-full-size distinction on the device side yet (that would need real on-device JPEG downsampling, out of scope per the spec's "Out of Scope" section). `download(to:)` and `downloadThumbnail` differ only in destination (disk vs. in-memory `Data`), matching the Data-axis split in the story map.
-
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 3: Run the test to confirm it passes**
 
 Run: `xcodebuild -project ip3gs.xcodeproj -scheme ip3gs -destination 'platform=macOS' test -only-testing:ip3gsTests/DeviceBridgeDownloadTests`
 Expected: PASS (3 tests)
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add Sources/ip3gs/DeviceBridge/DeviceBridge.swift Tests/ip3gsTests/DeviceBridgeDownloadTests.swift
@@ -489,7 +467,69 @@ git commit -m "feat: add DeviceBridge thumbnail and download"
   - `protocol DeviceBridging { func checkConnection() -> DeviceState; func listPhotos(udid: String) -> [PhotoAsset]; func downloadThumbnail(_ asset: PhotoAsset) -> Data?; func download(_ asset: PhotoAsset, to directory: URL) -> Bool }`
   - `final class PhotoLibrary: ObservableObject { @Published var statusText: String; @Published var assets: [PhotoAsset]; @Published var thumbnails: [String: Data]; @Published var failedDownloads: [String]; func refresh(); func downloadAll(to directory: URL) }`
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Write `PhotoLibrary.swift`**
+
+```swift
+import Foundation
+
+protocol DeviceBridging {
+    func checkConnection() -> DeviceState
+    func listPhotos(udid: String) -> [PhotoAsset]
+    func downloadThumbnail(_ asset: PhotoAsset) -> Data?
+    func download(_ asset: PhotoAsset, to directory: URL) -> Bool
+}
+
+extension DeviceBridge: DeviceBridging {}
+
+final class PhotoLibrary: ObservableObject {
+    @Published var statusText: String = "No device connected"
+    @Published var assets: [PhotoAsset] = []
+    @Published var thumbnails: [String: Data] = [:]
+    @Published var failedDownloads: [String] = []
+
+    private let bridge: DeviceBridging
+
+    init(bridge: DeviceBridging) {
+        self.bridge = bridge
+    }
+
+    func refresh() {
+        switch bridge.checkConnection() {
+        case .notConnected:
+            statusText = "No device connected"
+            assets = []
+        case .untrusted:
+            statusText = "Trust this computer on the iPhone"
+            assets = []
+        case .connected(let udid):
+            assets = bridge.listPhotos(udid: udid)
+            for asset in assets {
+                thumbnails[asset.filename] = bridge.downloadThumbnail(asset)
+            }
+            statusText = "\(assets.count) photo\(assets.count == 1 ? "" : "s") found"
+        }
+    }
+
+    func downloadAll(to directory: URL) {
+        failedDownloads = []
+        var succeeded = 0
+
+        for asset in assets {
+            if bridge.download(asset, to: directory) {
+                succeeded += 1
+            } else {
+                failedDownloads.append(asset.filename)
+            }
+        }
+
+        statusText = failedDownloads.isEmpty
+            ? "Downloaded \(succeeded) of \(assets.count)"
+            : "Downloaded \(succeeded) of \(assets.count) (\(failedDownloads.count) failed)"
+    }
+}
+```
+
+- [ ] **Step 2: Write a verification test (after the code)**
 
 ```swift
 import XCTest
@@ -562,79 +602,12 @@ final class PhotoLibraryTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `xcodebuild -project ip3gs.xcodeproj -scheme ip3gs -destination 'platform=macOS' test -only-testing:ip3gsTests/PhotoLibraryTests`
-Expected: FAIL — `DeviceBridging` and `PhotoLibrary` do not exist yet.
-
-- [ ] **Step 3: Write `PhotoLibrary.swift`**
-
-```swift
-import Foundation
-
-protocol DeviceBridging {
-    func checkConnection() -> DeviceState
-    func listPhotos(udid: String) -> [PhotoAsset]
-    func downloadThumbnail(_ asset: PhotoAsset) -> Data?
-    func download(_ asset: PhotoAsset, to directory: URL) -> Bool
-}
-
-extension DeviceBridge: DeviceBridging {}
-
-final class PhotoLibrary: ObservableObject {
-    @Published var statusText: String = "No device connected"
-    @Published var assets: [PhotoAsset] = []
-    @Published var thumbnails: [String: Data] = [:]
-    @Published var failedDownloads: [String] = []
-
-    private let bridge: DeviceBridging
-
-    init(bridge: DeviceBridging) {
-        self.bridge = bridge
-    }
-
-    func refresh() {
-        switch bridge.checkConnection() {
-        case .notConnected:
-            statusText = "No device connected"
-            assets = []
-        case .untrusted:
-            statusText = "Trust this computer on the iPhone"
-            assets = []
-        case .connected(let udid):
-            assets = bridge.listPhotos(udid: udid)
-            for asset in assets {
-                thumbnails[asset.filename] = bridge.downloadThumbnail(asset)
-            }
-            statusText = "\(assets.count) photo\(assets.count == 1 ? "" : "s") found"
-        }
-    }
-
-    func downloadAll(to directory: URL) {
-        failedDownloads = []
-        var succeeded = 0
-
-        for asset in assets {
-            if bridge.download(asset, to: directory) {
-                succeeded += 1
-            } else {
-                failedDownloads.append(asset.filename)
-            }
-        }
-
-        statusText = failedDownloads.isEmpty
-            ? "Downloaded \(succeeded) of \(assets.count)"
-            : "Downloaded \(succeeded) of \(assets.count) (\(failedDownloads.count) failed)"
-    }
-}
-```
-
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 3: Run the test to confirm it passes**
 
 Run: `xcodebuild -project ip3gs.xcodeproj -scheme ip3gs -destination 'platform=macOS' test -only-testing:ip3gsTests/PhotoLibraryTests`
 Expected: PASS (4 tests)
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add Sources/ip3gs/PhotoLibrary.swift Tests/ip3gsTests/PhotoLibraryTests.swift
