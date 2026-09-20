@@ -3,8 +3,9 @@
 **Axis:** Spike. Independent of all app code; resolves the riskiest unknown
 (can we get the binaries running at all, portably) before anything is built.
 
-**Status:** Committed (`2405dfe`). Scripts written; binaries not yet produced
-— see [README](README.md#execution-state).
+**Status:** Done (2026-09-20). `setup_test.sh` passes. The code blocks below are
+the *original* scripts, which could not build (see below); the committed
+scripts differ — read `Tools/setup.sh`, not this brief.
 
 **Files:** create `Tools/setup.sh`, `Tools/setup_test.sh`; modify `.gitignore`.
 
@@ -57,18 +58,19 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "PASS: vendored binaries built and respond to --version"
 ```
 
-- [ ] **Step 4: run it** — `chmod +x Tools/setup.sh Tools/setup_test.sh && ./Tools/setup_test.sh`
+- [x] **Step 4: run it** — `chmod +x Tools/setup.sh Tools/setup_test.sh && ./Tools/setup_test.sh`
   Expected: `PASS: vendored binaries built and respond to --version`
 
-  **Not yet achieved.** Requires `pkg-config` (`brew install pkg-config`);
-  `autoconf`, `automake`, and GNU `libtool` are already present. These are
-  developer-machine prerequisites, not app dependencies.
+  **Achieved**, after fixing two defects in the original script: it built
+only libimobiledevice, whose dependencies (libplist, libimobiledevice-glue,
+libtatsu, libusbmuxd) are not in Homebrew, and linking OpenSSL by full `.a`
+path made libtool nest an archive and drop every symbol. The script now builds
+the whole chain statically, and `setup_test.sh` enforces the portability check.
 
 - [x] **Step 5: commit** — `feat: add local libimobiledevice vendoring script`
 
 ## Open risk
 
-A source build is not automatically portable. Before this task can be called
-truly done, the produced binaries need checking for absolute dylib references
-(`otool -L Tools/bin/afcclient`) — the shipped app must run on a Mac with no
-Homebrew. See [`../architecture.md`](../architecture.md#binary-resolution-and-portability).
+None for portability — `setup_test.sh` now fails if either binary links
+anything outside system frameworks. See
+[`../architecture.md`](../architecture.md#binary-resolution-and-portability).

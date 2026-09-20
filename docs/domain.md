@@ -30,6 +30,36 @@ dependency of this project. We use two of its CLI tools:
 | `ideviceinfo` | Connection + trust check; source of the device UDID. |
 | `afcclient` | Directory listing and file pull from the media partition. |
 
+## Tool interfaces (verified from source)
+
+Read from `libimobiledevice` 1.4.0 (`tools/afcclient.c`, `tools/ideviceinfo.c`)
+and exercised against the built binaries with **no device attached**. This is
+source-level truth, not device truth: what the phone itself returns is still
+**[assumed]** (see [`research.md`](research.md)).
+
+**`afcclient` is an interactive shell, not a subcommand CLI.**
+
+- Positional arguments are ignored. Only `-u <udid>`, `-n`, `--container`,
+  `--documents`, `-d`, `-h`, `-v` are options; commands (`ls`, `get`, `put`,
+  `cd`, …) are read from **stdin**, one per line.
+- It prints a colored prompt `afc:<dir> > ` (no trailing newline) to stdout
+  before every command, so output must be stripped of ANSI escapes and prompts.
+- Input **must end with `quit`**: at EOF the loop spins forever (`getchar()`
+  returns -1, which the loop treats as a character).
+- `get [-f] <remote> <local>` writes to a **local path**. There is no `-`
+  for stdout, so a download is a file on disk, not a pipe.
+- It exits 0 even when a command fails; failures are `Error: …` lines on
+  **stdout**. Success of `get` is best confirmed by the file existing.
+- `-u ""` is rejected (exit 2). With no `-u` it targets the first device found.
+  With no device at all it exits 1: `No device found. …`.
+
+**`ideviceinfo` errors** go to stderr as
+`ERROR: Could not connect to lockdownd: <text> (<code>)`, or
+`ERROR: No device found!` (exit 255). Lockdown codes: `-17` passcode locked,
+`-18` pairing denied, `-19` **trust dialog pending**, `-21` host unknown to the
+device. The code is the trailing parenthesised number; there is no
+`error code -18` string.
+
 ## Photo library layout
 
 Photos live on the media partition under `/DCIM/`, grouped into numbered
@@ -53,14 +83,13 @@ things from the user:
 
 | State | What the user must do | How we detect it |
 |---|---|---|
-| No device connected | Plug the phone in | `ideviceinfo` exits non-zero, no trust-specific error |
-| Connected, not trusted | Tap "Trust" on the iPhone, then retry | **[assumed]** lockdownd `error code -18` on stderr |
-| Connected and paired | Nothing | `UniqueDeviceID:` present in `ideviceinfo` stdout |
+| No device connected | Plug the phone in | `ideviceinfo` exits non-zero without a lockdownd error line (`ERROR: No device found!`) |
+| Connected, not trusted | Tap "Trust" on the iPhone, then retry | lockdownd error code in {-17, -18, -19, -21} — code list verified from source; **[assumed]** that a real 3GS reports one of these |
+| Connected and paired | Nothing | **[assumed]** `UniqueDeviceID:` present in `ideviceinfo` stdout |
 
-The `-18` detection is the single most fragile assumption in the codebase:
-it is a string match against an error message, for a specific failure, on a
-specific libimobiledevice version. If trust detection misbehaves on real
-hardware, look here first.
+Which code a real, untrusted 3GS reports is the most fragile assumption left
+in trust detection. If it misbehaves on hardware, look at
+`untrustedLockdownCodes` in `DeviceBridge.swift` first.
 
 ## Portability constraint
 

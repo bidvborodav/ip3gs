@@ -1,7 +1,7 @@
 # Experiment: POC photo browser & downloader
 
 **Branch:** `poc/photo-browser` (not merged to `main`)
-**Status as of:** 2026-09-20
+**Status as of:** 2026-09-20 (milestone 1: Tasks 1–6 done, Task 7 needs hardware)
 
 ## Goal
 
@@ -45,27 +45,36 @@ per task, reviewed before advancing. Ledger:
 
 | Task | Status |
 |---|---|
-| 1. Vendor binaries | **Committed** (`2405dfe`) — scripts written, review pending, binaries not yet produced |
-| 2–7 | Not started |
+| 1. Vendor binaries | **Done** — `setup_test.sh` passes: static `ideviceinfo` + `afcclient` 1.4.0, system libraries only |
+| 2. `checkConnection()` | **Done, contract corrected** — trust codes parsed from real `ideviceinfo` message format |
+| 3. `listPhotos()` | **Done, contract corrected** — `afcclient` driven via stdin, prompts/ANSI stripped |
+| 4. Thumbnail & download | **Done, contract corrected** — `get` to a local file; `ProcessRunning` returns `Data` |
+| 5. `PhotoLibrary` | **Done** as briefed |
+| 6. SwiftUI views | **Done** as briefed — builds; never launched against a device |
+| 7. Real-device verification | **Not started** — needs an iPhone 3GS |
 
-**Task 1 caveat.** `Tools/setup.sh` and `Tools/setup_test.sh` are committed,
-but running them has never produced binaries — `Tools/bin/` is empty. As of
-2026-09-20 the only missing autotools prerequisite is `pkg-config`
-(`autoconf`, `automake`, and GNU `libtool` are installed). `xcodebuild` is
-also unusable until `xcode-select` is pointed at Xcode. Both are
-local-machine gaps, not code defects.
+**Briefs 2–4 are stale.** Their code blocks assume `afcclient ls <path>`,
+`afcclient get <path> -` and an `error code -18` string; all three were
+falsified from the 1.4.0 source. The implementation follows
+[`../domain.md`](../domain.md#tool-interfaces-verified-from-source), not the
+briefs. Plan and deviations: [`PLAN.md`](PLAN.md).
 
-**Pre-flight ruling on record.** Task 4's brief originally lacked a note —
-present in Task 3 — that its new methods must go inside `DeviceBridge`'s
-existing class body rather than a separate extension, to reach its `private`
-properties. The note has since been folded into
-[task-4](task-4-thumbnail-download.md) directly.
+**Verification state.** `xcodebuild build` and `test` succeed (23 tests). All
+of them use fakes shaped after the tool source; none has touched a device.
+Real binaries were only exercised with no phone attached (`No device found`
+paths, exit codes 255 / 1 / 2).
 
 ## Next step
 
-Review Task 1 (commits `4dbd3f9..2405dfe`), then start Task 2.
+**Task 7**, which needs the phone: plug in an iPhone 3GS, run the probes in
+[`../research.md`](../research.md#how-to-settle-them), and replace the
+source-derived fixtures with real captures. Before that, the app cannot find
+its binaries unless launched from the repo root (`binDir` defaults to the
+relative `Tools/bin`) — bundle them or pass an absolute path.
 
 ## Housekeeping
 
 - Stash entry `stash@{0}` ("WIP on poc/photo-browser: 4dbd3f9") is left over
-  from an interrupted step and has never been inspected. Look before dropping.
+  from an interrupted step. Inspected 2026-09-20: it only edits the root
+  `CLAUDE.md` (adds a house rule: commit **without** Co-Authored-By or session
+  links). Not applied, not dropped.

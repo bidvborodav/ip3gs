@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Hobby project: a local macOS app to browse, download, and manage the photo library on an iPhone 3GS from a modern Mac, since the current sync stack (iTunes/Photos/Image Capture) doesn't support this device anymore.
 
-**Current state:** POC on branch `poc/photo-browser`. Only the vendoring scripts under `Tools/` exist; `Sources/ip3gs/` is still the xcodegen scaffold. Neither the build nor the test command has ever run successfully on this machine — see prerequisites below.
+**Current state:** POC milestone 1 reached (2026-09-20): portable binaries build, Tasks 1–6 are implemented, `xcodebuild build` and `test` pass (23 tests, all against fakes). **Nothing has met a real iPhone 3GS yet** — Task 7 (hardware verification) is the next milestone. Work is on worktree branch `worktree-poc-milestone-1`, cut from `poc/photo-browser`.
 
 ## Documentation
 
@@ -36,11 +36,15 @@ xcodebuild -project ip3gs.xcodeproj -scheme ip3gs -destination 'platform=macOS' 
 
 `ip3gs.xcodeproj` is gitignored — it does not exist in a fresh clone. Never hand-edit it; edit `project.yml` and re-run `xcodegen generate`.
 
-### Prerequisites (unmet as of 2026-09-20)
+### Prerequisites (met as of 2026-09-20)
 
-1. **`xcodebuild` is unusable** — `xcode-select` points at `/Library/Developer/CommandLineTools`. Xcode-beta is installed but not selected. *You must run this yourself:* `sudo xcode-select -s /Applications/Xcode-beta.app`
-2. **`Tools/bin/` is empty** — the only missing autotools prerequisite is `pkg-config` (`brew install pkg-config`); `autoconf`, `automake`, and GNU `libtool` are present.
-3. **No scheme is generated** — `project.yml` defines no `scheme:`, so whether `-scheme ip3gs` resolves via Xcode's autocreation is unverified. If it fails, add a scheme to `project.yml` rather than creating one by hand in Xcode.
+1. `xcode-select` points at `/Applications/Xcode-beta.app`. The scheme `ip3gs` resolves without a `scheme:` in `project.yml`.
+2. Build-time tools: `autoconf`, `automake`, `pkg-config`, and Homebrew `openssl@3` (only its static `.a` files are used; nothing from Homebrew is linked dynamically).
+3. `Tools/bin/` is gitignored, so **each worktree/clone must run `./Tools/setup.sh` itself** (~3 min, clones five upstream repos).
+
+`setup.sh` builds libplist → libimobiledevice-glue → libtatsu → libusbmuxd → libimobiledevice **statically**; `setup_test.sh` fails if either binary links anything outside system frameworks. Passing this gate means the binaries are portable — but see the two traps in [`docs/domain.md`](docs/domain.md#tool-interfaces-verified-from-source): `afcclient` is an interactive shell, not a subcommand CLI.
+
+Known gap: `DeviceBridge` defaults `binDir` to the relative `Tools/bin`, which only resolves when the app's working directory is the repo root. Bundling the binaries into the app (architecture rule) is not done yet.
 
 **"No global/Homebrew installs" governs the shipped tool, not the dev machine.** Installing build-time dependencies locally is fine. What must hold is that the finished app carries its own `ideviceinfo`/`afcclient`, resolves them from its own bundle rather than `$PATH`, and runs on a Mac with no Homebrew. Do **not** satisfy `Tools/bin/` by symlinking Homebrew's libimobiledevice — those link against `/opt/homebrew` dylibs and break portability. Details in [`docs/architecture.md`](docs/architecture.md#binary-resolution-and-portability).
 

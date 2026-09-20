@@ -3,6 +3,8 @@
 **Axis:** Data. Same shape as Task 3 but a different payload (binary file
 contents vs. text listing) and a different destination (memory vs. disk).
 
+**Status:** Done, but **this brief's code is stale** — its `afcclient`/`ideviceinfo` contract was falsified from source. Follow [`../domain.md`](../domain.md#tool-interfaces-verified-from-source) and the code.
+
 **Files:** modify `Sources/ip3gs/DeviceBridge/DeviceBridge.swift`; test
 `Tests/ip3gsTests/DeviceBridgeDownloadTests.swift`.
 

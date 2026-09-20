@@ -3,6 +3,8 @@
 **Axis:** Interface. A new parsing interface (afcclient listing → `PhotoAsset`),
 independent of connection logic.
 
+**Status:** Done, but **this brief's code is stale** — its `afcclient`/`ideviceinfo` contract was falsified from source. Follow [`../domain.md`](../domain.md#tool-interfaces-verified-from-source) and the code.
+
 **Files:** create `Sources/ip3gs/DeviceBridge/PhotoAsset.swift`; modify
 `Sources/ip3gs/DeviceBridge/DeviceBridge.swift`; test
 `Tests/ip3gsTests/DeviceBridgeListPhotosTests.swift`.

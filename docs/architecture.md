@@ -1,10 +1,8 @@
 # Architecture
 
-> **Build state (2026-09-20):** this describes the *designed* shape. Only the
-> vendoring scripts under `Tools/` exist today; `Sources/ip3gs/` is still the
-> xcodegen scaffold (`ContentView` renders `Text("ip3gs")`). Layers 1–3 below
-> are specified but unwritten — see
-> [`experiments/README.md`](experiments/README.md) for what has actually landed.
+> **Build state (2026-09-20):** all three layers are implemented and pass
+> their tests against fakes; nothing has been run against a real device. See
+> [`experiments/README.md`](experiments/README.md) for status.
 
 Three layers, each independently testable, deliberately thin. This is a POC:
 correctness and honest failure states matter more than polish.
@@ -27,10 +25,15 @@ All process execution goes through an injectable seam:
 
 ```swift
 protocol ProcessRunning {
-    func run(_ executablePath: String, arguments: [String])
-        throws -> (stdout: String, stderr: String, exitCode: Int32)
+    func run(_ executablePath: String, arguments: [String], stdin: String?)
+        throws -> (stdout: Data, stderr: String, exitCode: Int32)
 }
 ```
+
+`stdout` is `Data` because photo bytes are not UTF-8; `stdin` exists because
+`afcclient` takes its commands that way. `SystemProcessRunner` drains both
+output pipes before waiting on the child, or output past the 64 KB pipe buffer
+deadlocks it.
 
 `SystemProcessRunner` is the real implementation; tests inject a fake. That
 seam is the whole reason the parsing logic is unit-testable with no phone

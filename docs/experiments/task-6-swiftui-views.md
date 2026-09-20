@@ -2,6 +2,8 @@
 
 **Axis:** Path. Happy-path UI wired to `PhotoLibrary`; no new business logic.
 
+**Status:** Done as briefed (2026-09-20).
+
 **Files:** modify `Sources/ip3gs/ip3gsApp.swift`, `Sources/ip3gs/ContentView.swift`.
 
 **Produces:** no new public interface — this is the leaf UI layer.

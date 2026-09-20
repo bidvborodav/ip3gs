@@ -3,6 +3,8 @@
 **Axis:** Rules. Encodes the business rules (not-connected / untrusted /
 per-file-failure-is-non-fatal) on top of the mechanical layers in Tasks 2–4.
 
+**Status:** Done as briefed (2026-09-20).
+
 **Files:** create `Sources/ip3gs/PhotoLibrary.swift`; test
 `Tests/ip3gsTests/PhotoLibraryTests.swift`.
 

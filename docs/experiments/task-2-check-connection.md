@@ -2,6 +2,8 @@
 
 **Axis:** Path. The narrowest happy/known-error path through the device layer.
 
+**Status:** Done, but **this brief's code is stale** — its `afcclient`/`ideviceinfo` contract was falsified from source. Follow [`../domain.md`](../domain.md#tool-interfaces-verified-from-source) and the code.
+
 **Files:** create `Sources/ip3gs/DeviceBridge/ProcessRunning.swift`,
 `Sources/ip3gs/DeviceBridge/DeviceBridge.swift`; test
 `Tests/ip3gsTests/DeviceBridgeConnectionTests.swift`.
