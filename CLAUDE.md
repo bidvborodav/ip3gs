@@ -6,12 +6,64 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Hobby project: a local macOS app to browse, download, and manage the photo library on an iPhone 3GS from a modern Mac, since the current sync stack (iTunes/Photos/Image Capture) doesn't support this device anymore.
 
-The repository is currently empty — no code has been written yet.
+Current state: a POC is being built on branch `poc/photo-browser`. The app target is still the xcodegen scaffold (`ContentView` renders a `Text("ip3gs")` placeholder); only the dependency-vendoring scripts under `Tools/` have been implemented so far. See `STATUS.md` for per-task execution state.
 
-## Tools & Sources
+## Commands
 
-- `xcodegen` manages the Xcode project (project.yml → .xcodeproj). Do not hand-edit the .xcodeproj; edit project.yml and regenerate.
-- `deepwiki` is the research tool of choice for understanding relevant device/protocol behavior (e.g. how iOS ~6-era devices expose photo libraries over USB/AFC) before implementing.
+```bash
+./Tools/setup.sh              # one-time: build libimobiledevice into Tools/bin/ (gitignored)
+./Tools/setup_test.sh         # verifies setup.sh produced working binaries (no device needed)
+xcodegen generate             # REQUIRED after clone and after any project.yml change
+xcodebuild -project ip3gs.xcodeproj -scheme ip3gs -configuration Debug build
+xcodebuild -project ip3gs.xcodeproj -scheme ip3gs -destination 'platform=macOS' test
+xcodebuild -project ip3gs.xcodeproj -scheme ip3gs -destination 'platform=macOS' test \
+  -only-testing:ip3gsTests/<TestClassName>      # single test class
+```
+
+`ip3gs.xcodeproj` is gitignored (`*.xcodeproj`) — it does not exist in a fresh clone and must be regenerated from `project.yml`. Never hand-edit the `.xcodeproj`; edit `project.yml` and re-run `xcodegen generate`.
+
+### Environment prerequisites (currently unmet on this machine)
+
+Neither the build nor the test command has ever run successfully here. Two blockers, both local-machine setup rather than code defects:
+
+1. `xcodebuild` is unusable — `xcode-select` points at `/Library/Developer/CommandLineTools`. `/Applications/Xcode-beta.app` is installed but not selected. The user must run `sudo xcode-select -s /Applications/Xcode-beta.app` themselves.
+2. `./Tools/setup.sh` fails — it builds libimobiledevice from source and needs `autoconf`, `automake`, `libtool`, and `pkg-config`, none of which are installed. `Tools/bin/` is therefore empty.
+
+**Installing binaries on this machine is allowed** (user ruling, 2026-09-20). Homebrew-install whatever the build needs — `brew install autoconf automake libtool pkg-config` to unblock `setup.sh`, or `brew install libimobiledevice` and point `Tools/bin/` at those binaries if building from source stays painful. Note the design spec and plan still record the older "no global/Homebrew installs" constraint; that constraint is superseded for this machine, but the *app* should still resolve its binaries from `Tools/bin/` rather than `$PATH`, so the bridge layer stays unchanged either way.
+
+Also note `project.yml` defines no `scheme:`, so `xcodegen generate` writes no shared scheme — whether `-scheme ip3gs` resolves via Xcode's autocreation is unverified. If it fails, add a scheme to `project.yml` rather than creating one by hand in Xcode.
+
+## Architecture
+
+Three layers, each independently testable, deliberately kept thin (this is a POC — correctness and honest failure states over polish):
+
+1. **`DeviceBridge`** (`Sources/ip3gs/DeviceBridge/`) — the only code that touches the device. It shells out via `Process` to the vendored CLI binaries `Tools/bin/ideviceinfo` and `Tools/bin/afcclient`. No C interop, no `$PATH` lookup, no system install. All process execution goes through an injectable `ProcessRunning` protocol so parsing logic is unit-testable against captured sample output with no physical device.
+2. **`PhotoLibrary`** (`Sources/ip3gs/PhotoLibrary.swift`) — `ObservableObject` owning `[PhotoAsset]`, thumbnails, and download state. The sole consumer of `DeviceBridge`, and it consumes it through a `DeviceBridging` protocol so tests inject a fake. This is where the error rules live: not-connected / untrusted / per-file-failure-is-non-fatal.
+3. **SwiftUI views** (`Sources/ip3gs/`) — one window: status bar, `LazyVGrid` thumbnail grid, one "Download All" button. Stateless read of `PhotoLibrary`; no new business logic.
+
+Consequences of this shape worth knowing before editing:
+
+- `DeviceBridge`'s `binDir` and `runner` are `private`, so new methods go **inside** the existing `final class DeviceBridge { ... }` body, not in a separate extension — an extension can't reach them and won't compile.
+- No modals or alerts anywhere. Every state — including errors — surfaces as plain text in the status bar.
+- Download destination is hardcoded to `~/Pictures/ip3gs/`, chosen specifically to avoid folder-picker and sandbox-entitlement work.
+- `DeviceBridge`'s `afcclient`/`ideviceinfo` argument and output parsing is written against a *documented assumption*, not observed real-device output. Plan Task 7 exists to close that gap against real hardware; if reality differs, fix the parsing **and** update the test fixtures to match reality.
+
+## Project docs
+
+Specs and plans live under `docs/` (kept out of source dirs per the user's documentation rule):
+
+| Artifact | Path |
+|---|---|
+| Design spec (scope, constraints, out-of-scope) | `docs/superpowers/specs/2026-09-12-poc-photo-browser-design.md` |
+| Implementation plan (7 SPIDR/INVEST tasks) | `docs/superpowers/plans/2026-09-12-poc-photo-browser.md` |
+| Execution ledger | `.superpowers/sdd/2026-09-12-poc-photo-browser/progress.md` |
+| Live status / next step | `STATUS.md` (untracked) |
+
+The plan explicitly **disables TDD** for this POC: write the implementation, then a single verification test after the fact. Do not run red-green cycles here — this overrides the default `superpowers:test-driven-development` guidance for work on this plan.
+
+## Research
+
+For device/protocol behavior (how iOS ~6-era devices expose photo libraries over USB/AFC), prefer `deepwiki` when it is available in the session; it is not configured as a project-level MCP server, so fall back to web search if the tool isn't present.
 
 
 ## Atomic Commits
@@ -53,7 +105,8 @@ You are the most expensive tier. Your comparative advantage is decomposition, ju
 
 **Verify, then commit:** never accept a subagent's self-report as done. Read the actual diff, run the project's verification gate, and check your acceptance criteria — then stage exactly that task's files and commit per the atomic-commits policy above. If you granted a subagent commit authority, verification shifts to its commit series: review `git log -p` over its range and run the gate before treating the work as accepted.
 
-## Notes for future sessions
+## Housekeeping
 
-- Update this file once real structure exists: build/run commands, how xcodegen is invoked, module layout, and how the app talks to the device.
+- A stash entry `stash@{0}` ("WIP on poc/photo-browser: 4dbd3f9") is left over from an interrupted step and has never been inspected. Do not assume it's disposable — look before dropping.
+- `poc/photo-browser` is not merged to `main`.
 
