@@ -1,34 +1,30 @@
 import XCTest
 @testable import ip3gs
 
-private struct FakeRunner: ProcessRunning {
-    let stdout: String
-    let stderr: String
-    let exitCode: Int32
-
-    func run(_ executablePath: String, arguments: [String]) throws -> (stdout: Data, stderr: String, exitCode: Int32) {
-        (Data(stdout.utf8), stderr, exitCode)
-    }
-}
-
 final class DeviceBridgeConnectionTests: XCTestCase {
-    func testNoDeviceConnected() {
-        let runner = FakeRunner(stdout: "", stderr: "No device found.", exitCode: 1)
-        let bridge = DeviceBridge(binDir: "Tools/bin", runner: runner)
-        XCTAssertEqual(bridge.checkConnection(), .notConnected)
+    private func state(stderr: String, exitCode: Int32 = 1, stdout: String = "") -> DeviceState {
+        DeviceBridge(binDir: "Tools/bin", runner: FakeRunner(stdout: stdout, stderr: stderr, exitCode: exitCode)).checkConnection()
     }
 
-    func testUntrustedDevice() {
-        let runner = FakeRunner(stdout: "", stderr: "ERROR: Could not connect to lockdownd, error code -18", exitCode: 1)
-        let bridge = DeviceBridge(binDir: "Tools/bin", runner: runner)
-        XCTAssertEqual(bridge.checkConnection(), .untrusted)
+    func testNoDeviceConnected() {
+        XCTAssertEqual(state(stderr: "ERROR: No device found!"), .notConnected)
+    }
+
+    func testTrustDialogPendingIsUntrusted() {
+        XCTAssertEqual(state(stderr: "ERROR: Could not connect to lockdownd: pairing dialog response pending (-19)"), .untrusted)
+    }
+
+    func testPairingDeniedIsUntrusted() {
+        XCTAssertEqual(state(stderr: "ERROR: Could not connect to lockdownd: user denied pairing (-18)"), .untrusted)
+    }
+
+    func testUnrelatedLockdownErrorIsNotUntrusted() {
+        XCTAssertEqual(state(stderr: "ERROR: Could not connect to lockdownd: mux error (-8)"), .notConnected)
     }
 
     func testConnectedDevice() {
         let stdout = "DeviceName: iPhone\nUniqueDeviceID: abc123\nProductVersion: 6.1.6\n"
-        let runner = FakeRunner(stdout: stdout, stderr: "", exitCode: 0)
-        let bridge = DeviceBridge(binDir: "Tools/bin", runner: runner)
-        XCTAssertEqual(bridge.checkConnection(), .connected(udid: "abc123"))
+        XCTAssertEqual(state(stderr: "", exitCode: 0, stdout: stdout), .connected(udid: "abc123"))
     }
 }
 
@@ -36,9 +32,14 @@ final class SystemProcessRunnerTests: XCTestCase {
     func testLargeBinaryOutputSurvivesIntact() throws {
         // 200 KB of non-UTF-8 bytes: exceeds the pipe buffer and cannot round-trip through String.
         let (stdout, _, exitCode) = try SystemProcessRunner().run(
-            "/usr/bin/head", arguments: ["-c", "200000", "/dev/urandom"]
+            "/usr/bin/head", arguments: ["-c", "200000", "/dev/urandom"], stdin: nil
         )
         XCTAssertEqual(exitCode, 0)
         XCTAssertEqual(stdout.count, 200_000)
+    }
+
+    func testStdinIsDeliveredToChild() throws {
+        let (stdout, _, _) = try SystemProcessRunner().run("/bin/cat", arguments: [], stdin: "ls /\nquit\n")
+        XCTAssertEqual(String(decoding: stdout, as: UTF8.self), "ls /\nquit\n")
     }
 }
