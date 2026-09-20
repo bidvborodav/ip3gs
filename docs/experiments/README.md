@@ -1,7 +1,7 @@
 # Experiment: POC photo browser & downloader
 
 **Branch:** `poc/photo-browser` (not merged to `main`)
-**Status as of:** 2026-09-20 (milestone 1: Tasks 1–6 done, Task 7 needs hardware)
+**Status as of:** 2026-09-20 (milestone 1 reached; Task 7 verified on hardware except the untrusted path)
 
 ## Goal
 
@@ -51,7 +51,7 @@ per task, reviewed before advancing. Ledger:
 | 4. Thumbnail & download | **Done, contract corrected** — `get` to a local file; `ProcessRunning` returns `Data` |
 | 5. `PhotoLibrary` | **Done** as briefed |
 | 6. SwiftUI views | **Done** as briefed — builds; never launched against a device |
-| 7. Real-device verification | **Not started** — needs an iPhone 3GS |
+| 7. Real-device verification | **Done except the untrusted path** — connection, listing, and all 169 downloads verified on a real 3GS (`DeviceIntegrationTests`); untrusted state needs an unpaired phone; GUI not launched |
 
 **Briefs 2–4 are stale.** Their code blocks assume `afcclient ls <path>`,
 `afcclient get <path> -` and an `error code -18` string; all three were
@@ -59,18 +59,31 @@ falsified from the 1.4.0 source. The implementation follows
 [`../domain.md`](../domain.md#tool-interfaces-verified-from-source), not the
 briefs. Plan and deviations: [`PLAN.md`](PLAN.md).
 
-**Verification state.** `xcodebuild build` and `test` succeed (23 tests). All
-of them use fakes shaped after the tool source; none has touched a device.
-Real binaries were only exercised with no phone attached (`No device found`
-paths, exit codes 255 / 1 / 2).
+**Verification state.** `xcodebuild build` and `test` succeed. 23 unit tests
+use fakes. `DeviceIntegrationTests` (5 tests, opt-in) ran against a real
+iPhone 3GS on 2026-09-20: connected + UDID, listing, byte-correct JPEG, clean
+failure on a missing file, and a full-library refresh + download-all (169 of
+169, 0 failures). Run them with:
+
+```bash
+TEST_RUNNER_IP3GS_DEVICE=1 xcodebuild -project ip3gs.xcodeproj -scheme ip3gs \
+  -destination 'platform=macOS' test -only-testing:ip3gsTests/DeviceIntegrationTests
+```
+
+**Not verified:** the SwiftUI window itself was never launched or seen (no way
+to drive the GUI from the session), and the untrusted-device path.
 
 ## Next step
 
-**Task 7**, which needs the phone: plug in an iPhone 3GS, run the probes in
-[`../research.md`](../research.md#how-to-settle-them), and replace the
-source-derived fixtures with real captures. Before that, the app cannot find
-its binaries unless launched from the repo root (`binDir` defaults to the
-relative `Tools/bin`) — bundle them or pass an absolute path.
+1. **Unblock the UI.** `refresh()` and `downloadAll` each block for ~77–79 s on
+   169 files (measured). Move them off the main thread and publish results
+   incrementally — this is what makes the app usable.
+2. Bundle `Tools/bin` into the app: `binDir` defaults to the relative
+   `Tools/bin`, so the app only finds its binaries when launched from the repo
+   root.
+3. Launch the app and eyeball the grid; try the untrusted path on a phone that
+   has not paired with this Mac.
+4. Decide about `.MOV` (filter, or download deliberately).
 
 ## Housekeeping
 

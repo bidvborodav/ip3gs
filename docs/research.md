@@ -18,16 +18,23 @@ when an assumption is confirmed or corrected, move the finding into
 
 | # | Question | Where it bites if wrong |
 |---|---|---|
-| 1 | ~~Does `ideviceinfo` emit `error code -18`?~~ **Settled (source):** no. It prints `… lockdownd: <text> (<code>)`; the trust-pending state is `-19`. **Open:** which code a real untrusted 3GS reports. | Trust detection degrades to "No device connected" if the phone reports a code outside {-17,-18,-19,-21} |
-| 2 | Is `UniqueDeviceID:` the exact stdout key, with that spelling and colon? | Connection check never reports `.connected`; app appears permanently dead |
-| 3 | ~~Does `afcclient` accept `-u <udid> ls <path>`?~~ **Settled (source):** no — commands are read from stdin, prompts pollute stdout. **Open:** does the 3GS answer `ls /DCIM/100APPLE` with bare names one per line? | Listing returns empty or garbage assets |
-| 4 | ~~Does `afcclient get <remote> -` stream to stdout?~~ **Settled (source):** no — `get` writes a local file. `ProcessRunning` now returns `Data` and downloads go via a temp file. **Open:** are downloaded JPEGs byte-identical on hardware? | Corrupt or zero-length photos |
-| 5 | Are photos on a real device confined to `/DCIM/100APPLE`? | Photos beyond the first roll are silently missed |
-| 6 | Does AFC expose a cheap on-device thumbnail? | Grid pulls full-resolution JPEGs; slow and memory-hungry on a large library |
+| 1 | ~~Does `ideviceinfo` emit `error code -18`?~~ **Settled (source):** no — `… lockdownd: <text> (<code>)`. **Open (hardware):** which code an *untrusted* 3GS reports. Needs an unpaired phone. | Trust detection degrades to "No device connected" if the phone reports a code outside {-17,-18,-19,-21} |
+| 2 | ~~Is `UniqueDeviceID:` the stdout key?~~ **Confirmed on hardware:** `UniqueDeviceID: <40 hex>`. | — |
+| 3 | ~~Does `afcclient` list bare names?~~ **Confirmed on hardware** (via stdin, prompts stripped). | — |
+| 4 | ~~Do downloads survive as binary?~~ **Confirmed on hardware:** `get -f` writes byte-correct JPEGs (SOI/EOI intact, 169 of 169). | — |
+| 5 | Are photos confined to `/DCIM/100APPLE`? **True for the test phone** (single roll). **Open:** a phone with >1 roll. | Photos beyond the first roll silently missed |
+| 6 | ~~Does AFC expose a cheap thumbnail?~~ **Settled:** only as packed `.ithmb` containers ([`domain.md`](domain.md#photo-library-layout)); needs a decoder. | — |
+| 7 | **New:** are `.MOV` files worth listing? They are pulled whole for thumbnails and downloads. | Wasted time and disk; tolerable for the POC |
 
-Fixtures in the test suite are shaped after the tool's *source* (colored
-prompt, `Error:` lines on stdout), not captured from a device. Replace them
-with real captures in Task 7.
+**Measured on hardware** (169 files, USB, one phone): `refresh()` 77 s,
+`downloadAll` 79 s — each **blocking the calling thread**, i.e. the SwiftUI
+window would freeze for over a minute at launch and again on "Download All".
+This is the synchronous shortcut noted in [Task 5](experiments/task-5-photo-library.md),
+now quantified.
+
+Fixtures in the unit tests are shaped after the tool's *source*, and the
+listing/download shape has since been confirmed against a real device; the
+untrusted-state fixture is still source-derived.
 
 ## How to settle them
 

@@ -5,10 +5,11 @@ sync stack (iTunes/Photos/Image Capture) has dropped support for devices that
 old. The photos are still on the device and still reachable over USB — just
 not by any shipping Apple tool.
 
-> **Confidence warning.** Almost everything below is *assumed* from
-> documentation and prior art, not observed against the actual device. Items
-> marked **[assumed]** have never been verified on hardware. See
-> [`research.md`](research.md) for the full open-questions list.
+> **Confidence.** Verified on hardware 2026-09-20 against one iPhone 3GS
+> (`iPhone2,1`, iOS 6.1.6, already trusted): connection check, listing,
+> download. Items still marked **[assumed]** have not been observed — chiefly
+> the *untrusted* path, which needs a phone that has not paired with this Mac.
+> See [`research.md`](research.md) for what remains open.
 
 ## The access path
 
@@ -33,9 +34,8 @@ dependency of this project. We use two of its CLI tools:
 ## Tool interfaces (verified from source)
 
 Read from `libimobiledevice` 1.4.0 (`tools/afcclient.c`, `tools/ideviceinfo.c`)
-and exercised against the built binaries with **no device attached**. This is
-source-level truth, not device truth: what the phone itself returns is still
-**[assumed]** (see [`research.md`](research.md)).
+and exercised against the built binaries — first with no device, then against
+a real 3GS. Where the two disagree the device wins; they agreed here.
 
 **`afcclient` is an interactive shell, not a subcommand CLI.**
 
@@ -65,16 +65,23 @@ device. The code is the trailing parenthesised number; there is no
 Photos live on the media partition under `/DCIM/`, grouped into numbered
 "roll" directories. The POC currently targets **`/DCIM/100APPLE`** only.
 
+**Observed:** the test phone's `/DCIM` holds `.MISC` and one roll,
+`100APPLE`, with 169 entries: 163 `IMG_*.JPG` (~1 MB, 2048x1536, EXIF intact)
+and 6 `IMG_*.MOV`. Listing is bare names, one per line.
+
 **[assumed]** A device with more than ~1000 photos rolls over into
 `101APPLE`, `102APPLE`, and so on — so hardcoding `100APPLE` will silently
-miss photos on a well-used device. This is a known, accepted POC limitation,
-not an oversight; widening it is a follow-up once the single-directory path
-is proven.
+miss photos on a well-used device. Not exercised: this phone has a single
+roll. A known, accepted POC limitation.
 
-**[assumed]** There is no separate on-device thumbnail that AFC exposes
-cheaply. The POC therefore pulls full-resolution JPEGs and uses them as
-thumbnails — correct, but slow and memory-hungry on a large library. Real
-thumbnailing would mean downsampling locally after the pull.
+**Videos share the roll.** `.MOV` files are listed like photos, so the POC
+lists, "thumbnails" and downloads them too (whole file each time).
+
+**Thumbnails.** AFC does expose on-device thumbnails, but as packed
+`/PhotoData/Thumbnails/{79x79,120x120}.ithmb` container files indexed by
+`/PhotoData/Photos.sqlite`, not one JPEG per photo — using them means writing
+an `.ithmb` decoder. The POC instead pulls each full-resolution JPEG (measured: 169 files in
+77 s, ~0.5 s each) and uses it as its own thumbnail.
 
 ## Failure modes that matter
 
@@ -85,8 +92,10 @@ things from the user:
 |---|---|---|
 | No device connected | Plug the phone in | `ideviceinfo` exits non-zero without a lockdownd error line (`ERROR: No device found!`) |
 | Connected, not trusted | Tap "Trust" on the iPhone, then retry | lockdownd error code in {-17, -18, -19, -21} — code list verified from source; **[assumed]** that a real 3GS reports one of these |
-| Connected and paired | Nothing | **[assumed]** `UniqueDeviceID:` present in `ideviceinfo` stdout |
+| Connected and paired | Nothing | `UniqueDeviceID: <40 hex>` present in `ideviceinfo` stdout (observed) |
 
+The *untrusted* row is the only one never observed on hardware: it needs a
+phone that has not paired with this Mac, or one whose pairing was reset.
 Which code a real, untrusted 3GS reports is the most fragile assumption left
 in trust detection. If it misbehaves on hardware, look at
 `untrustedLockdownCodes` in `DeviceBridge.swift` first.

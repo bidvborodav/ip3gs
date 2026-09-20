@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Hobby project: a local macOS app to browse, download, and manage the photo library on an iPhone 3GS from a modern Mac, since the current sync stack (iTunes/Photos/Image Capture) doesn't support this device anymore.
 
-**Current state:** POC milestone 1 reached (2026-09-20): portable binaries build, Tasks 1–6 are implemented, `xcodebuild build` and `test` pass (23 tests, all against fakes). **Nothing has met a real iPhone 3GS yet** — Task 7 (hardware verification) is the next milestone. Work is on worktree branch `worktree-poc-milestone-1`, cut from `poc/photo-browser`.
+**Current state:** POC milestone 1 reached (2026-09-20): portable binaries build, Tasks 1–6 are implemented, `xcodebuild build` and `test` pass, and the device path is **verified on a real iPhone 3GS** (connect, list, download all 169 files, 0 failures). Known gaps: the UI blocks ~77 s on refresh and ~79 s on download (synchronous), the untrusted-device path and the GUI itself were never observed, and the app can't find its binaries outside the repo root. Work is on worktree branch `worktree-poc-milestone-1`, cut from `poc/photo-browser`. Next steps: [`docs/experiments/README.md`](docs/experiments/README.md#next-step).
 
 ## Documentation
 
@@ -32,6 +32,8 @@ xcodebuild -project ip3gs.xcodeproj -scheme ip3gs -configuration Debug build
 xcodebuild -project ip3gs.xcodeproj -scheme ip3gs -destination 'platform=macOS' test
 xcodebuild -project ip3gs.xcodeproj -scheme ip3gs -destination 'platform=macOS' test \
   -only-testing:ip3gsTests/<TestClassName>      # single test class
+# Against a real phone (skipped otherwise): prefix with TEST_RUNNER_IP3GS_DEVICE=1
+#   ... test -only-testing:ip3gsTests/DeviceIntegrationTests
 ```
 
 `ip3gs.xcodeproj` is gitignored — it does not exist in a fresh clone. Never hand-edit it; edit `project.yml` and re-run `xcodegen generate`.
@@ -52,7 +54,7 @@ Known gap: `DeviceBridge` defaults `binDir` to the relative `Tools/bin`, which o
 
 `SwiftUI views` → `PhotoLibrary` (state + error rules) → `DeviceBridge` (device I/O) → `ProcessRunning` → vendored CLI binaries. Each layer is injectable at the boundary below it, so everything is testable with no phone attached. Full detail in [`docs/architecture.md`](docs/architecture.md).
 
-Three things that will trip you up: `DeviceBridge`'s `binDir`/`runner` are `private`, so new methods go **inside** the class body, never in an extension; there are no modals or alerts anywhere, every state is one status-bar string; and the device-parsing code is written against assumptions no hardware has confirmed.
+Three things that will trip you up: `DeviceBridge`'s `binDir`/`runner` are `private`, so new methods go **inside** the class body, never in an extension; there are no modals or alerts anywhere, every state is one status-bar string; and the device-parsing code is confirmed on hardware for the trusted path only — the untrusted-device path is still source-derived (marked **[assumed]**).
 
 ## Atomic Commits
 After completing each task, create a git commit immediately. Do not batch multiple tasks into a single commit.
