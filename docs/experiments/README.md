@@ -77,7 +77,7 @@ to drive the GUI from the session), and the untrusted-device path.
 
 **Milestone 2 — "usable POC"** (branch `poc/milestone-2-usable`, from milestone 1): the app
 launches from Finder and stays responsive with the phone attached. Plan, task list and the
-judgement calls to review: [`milestone-2-plan.md`](milestone-2-plan.md). Milestone 3 is the
+judgement calls to review: [`milestone-2/`](milestone-2/README.md). Milestone 3 is the
 native sync app's Phase 0 spikes (one `afcclient` session doing many `get`s vs one spawn per file).
 
 The list below is the original gap analysis the plan answers:
