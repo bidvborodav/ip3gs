@@ -18,6 +18,12 @@ final class DeviceBridgeConnectionTests: XCTestCase {
         XCTAssertEqual(state(stderr: "ERROR: Could not connect to lockdownd: user denied pairing (-18)"), .untrusted)
     }
 
+    // Captured from a real iPhone 3GS (iOS 6.1.6) on 2026-09-20, when it briefly stopped recognising this
+    // Mac partway through a long download and accepted it again ~20 s later. Exit code was not captured.
+    func testInvalidHostIdCapturedFromRealDeviceIsUntrusted() {
+        XCTAssertEqual(state(stderr: "ERROR: Could not connect to lockdownd: Invalid HostID (-21)"), .untrusted)
+    }
+
     func testUnrelatedLockdownErrorIsNotUntrusted() {
         XCTAssertEqual(state(stderr: "ERROR: Could not connect to lockdownd: mux error (-8)"), .notConnected)
     }
