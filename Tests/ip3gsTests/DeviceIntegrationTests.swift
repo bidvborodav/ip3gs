@@ -48,7 +48,6 @@ final class DeviceIntegrationTests: XCTestCase {
         XCTAssertGreaterThan(data.count, 10_000)
         XCTAssertEqual(Array(data.prefix(3)), [0xFF, 0xD8, 0xFF], "JPEG SOI marker")
         XCTAssertEqual(Array(data.suffix(2)), [0xFF, 0xD9], "JPEG EOI marker")
-        XCTAssertEqual(bridge.downloadThumbnail(jpeg), data)
     }
 
     func testFullLibraryRefreshAndDownloadAll() throws {
@@ -77,7 +76,10 @@ final class DeviceIntegrationTests: XCTestCase {
     func testMissingFileFailsCleanly() throws {
         _ = try connectedUDID()
         let ghost = PhotoAsset(id: "NOPE.JPG", filename: "NOPE.JPG", remotePath: "/DCIM/100APPLE/NOPE.JPG")
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
 
-        XCTAssertNil(bridge.downloadThumbnail(ghost))
+        XCTAssertFalse(bridge.download(ghost, to: dir))
     }
 }

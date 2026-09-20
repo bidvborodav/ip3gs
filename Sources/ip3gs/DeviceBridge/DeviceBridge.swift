@@ -63,20 +63,6 @@ final class DeviceBridge {
         }
     }
 
-    // No real thumbnail exists on the device, so this is a full download read back from a temp dir.
-    func downloadThumbnail(_ asset: PhotoAsset) -> Data? {
-        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        guard (try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)) != nil else {
-            return nil
-        }
-        defer { try? FileManager.default.removeItem(at: tempDir) }
-
-        guard download(asset, to: tempDir) else {
-            return nil
-        }
-        return try? Data(contentsOf: tempDir.appendingPathComponent(asset.filename))
-    }
-
     // afcclient exits 0 even when `get` fails and only prints "Error: ...", so success is the file landing on disk.
     // [assumed] With no -u, afcclient targets the first connected device.
     func download(_ asset: PhotoAsset, to directory: URL) -> Bool {

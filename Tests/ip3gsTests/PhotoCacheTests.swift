@@ -8,7 +8,6 @@ private final class CountingBridge: DeviceBridging, @unchecked Sendable {
 
     func checkConnection() -> DeviceState { .notConnected }
     func listPhotos(udid: String) -> [PhotoAsset] { [] }
-    func downloadThumbnail(_ asset: PhotoAsset) -> Data? { nil }
     func download(_ asset: PhotoAsset, to directory: URL) -> Bool {
         downloadCount += 1
         guard succeeds else { return false }

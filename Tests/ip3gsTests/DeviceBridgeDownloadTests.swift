@@ -67,16 +67,4 @@ final class DeviceBridgeDownloadTests: XCTestCase {
 
         XCTAssertFalse(bridge.download(asset, to: dir))
     }
-
-    func testDownloadThumbnailReturnsBinaryDataAndCleansUp() {
-        let bridge = DeviceBridge(binDir: "Tools/bin", runner: fakeAFC(payload: jpegLikeBytes))
-
-        XCTAssertEqual(bridge.downloadThumbnail(asset), jpegLikeBytes)
-    }
-
-    func testDownloadThumbnailFailureReturnsNil() {
-        let bridge = DeviceBridge(binDir: "Tools/bin", runner: fakeAFC(payload: nil))
-
-        XCTAssertNil(bridge.downloadThumbnail(asset))
-    }
 }
