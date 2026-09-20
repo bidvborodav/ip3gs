@@ -53,4 +53,21 @@ final class DeviceBridge {
                 PhotoAsset(id: filename, filename: filename, remotePath: "\(Self.dcimPath)/\(filename)")
             }
     }
+
+    // [assumed] With no -u, afcclient targets the first connected device, and `get <path> -` writes to stdout.
+    func downloadThumbnail(_ asset: PhotoAsset) -> Data? {
+        guard let result = try? runner.run("\(binDir)/afcclient", arguments: ["get", asset.remotePath, "-"]),
+              result.exitCode == 0, !result.stdout.isEmpty else {
+            return nil
+        }
+        return result.stdout
+    }
+
+    func download(_ asset: PhotoAsset, to directory: URL) -> Bool {
+        guard let data = downloadThumbnail(asset) else {
+            return false
+        }
+        let destination = directory.appendingPathComponent(asset.filename)
+        return (try? data.write(to: destination)) != nil
+    }
 }
