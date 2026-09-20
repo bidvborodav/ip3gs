@@ -75,6 +75,13 @@ to drive the GUI from the session), and the untrusted-device path.
 
 ## Next step
 
+**Milestone 2 — "usable POC"** (branch `poc/milestone-2-usable`, from milestone 1): the app
+launches from Finder and stays responsive with the phone attached. Plan, task list and the
+judgement calls to review: [`milestone-2-plan.md`](milestone-2-plan.md). Milestone 3 is the
+native sync app's Phase 0 spikes (one `afcclient` session doing many `get`s vs one spawn per file).
+
+The list below is the original gap analysis the plan answers:
+
 1. **Unblock the UI.** `refresh()` and `downloadAll` each block for ~77–79 s on
    169 files (measured). Move them off the main thread and publish results
    incrementally — this is what makes the app usable.
