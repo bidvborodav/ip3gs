@@ -37,4 +37,20 @@ final class DeviceBridge {
 
         return .notConnected
     }
+
+    private static let dcimPath = "/DCIM/100APPLE"
+
+    func listPhotos(udid: String) -> [PhotoAsset] {
+        guard let result = try? runner.run("\(binDir)/afcclient", arguments: ["-u", udid, "ls", Self.dcimPath]) else {
+            return []
+        }
+
+        return String(decoding: result.stdout, as: UTF8.self)
+            .split(separator: "\n")
+            .map { String($0) }
+            .filter { !$0.isEmpty }
+            .map { filename in
+                PhotoAsset(id: filename, filename: filename, remotePath: "\(Self.dcimPath)/\(filename)")
+            }
+    }
 }
