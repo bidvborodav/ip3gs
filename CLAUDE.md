@@ -6,7 +6,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Hobby project: a local macOS app to browse, download, and manage the photo library on an iPhone 3GS from a modern Mac, since the current sync stack (iTunes/Photos/Image Capture) doesn't support this device anymore.
 
-Current state: a POC is being built on branch `poc/photo-browser`. The app target is still the xcodegen scaffold (`ContentView` renders a `Text("ip3gs")` placeholder); only the dependency-vendoring scripts under `Tools/` have been implemented so far. See `STATUS.md` for per-task execution state.
+**Current state:** POC on branch `poc/photo-browser`. Only the vendoring scripts under `Tools/` exist; `Sources/ip3gs/` is still the xcodegen scaffold. Neither the build nor the test command has ever run successfully on this machine — see prerequisites below.
+
+## Documentation
+
+Root file stays under 150 lines and points; everything else lives in `docs/`. Start at [`docs/README.md`](docs/README.md).
+
+| Document | Read it when |
+|---|---|
+| [`docs/domain.md`](docs/domain.md) | You need to know how the device works — lockdownd, AFC, DCIM, trust/pairing |
+| [`docs/architecture.md`](docs/architecture.md) | You're about to change app code — layers, contracts, portability rule |
+| [`docs/research.md`](docs/research.md) | **Before writing device-parsing code.** Open questions and unverified assumptions |
+| [`docs/best-practices.md`](docs/best-practices.md) | Working agreements, including ones that override Claude Code defaults |
+| [`docs/experiments/`](docs/experiments/README.md) | Current POC: scope, story map, per-task briefs, execution status |
+
+Two conventions that bite if ignored: one topic per file, promoted to a directory past ~200–300 lines; and unverified device behavior is marked **[assumed]**, never stated as fact.
 
 ## Commands
 
@@ -20,53 +34,21 @@ xcodebuild -project ip3gs.xcodeproj -scheme ip3gs -destination 'platform=macOS' 
   -only-testing:ip3gsTests/<TestClassName>      # single test class
 ```
 
-`ip3gs.xcodeproj` is gitignored (`*.xcodeproj`) — it does not exist in a fresh clone and must be regenerated from `project.yml`. Never hand-edit the `.xcodeproj`; edit `project.yml` and re-run `xcodegen generate`.
+`ip3gs.xcodeproj` is gitignored — it does not exist in a fresh clone. Never hand-edit it; edit `project.yml` and re-run `xcodegen generate`.
 
-### Environment prerequisites (currently unmet on this machine)
+### Prerequisites (unmet as of 2026-09-20)
 
-Neither the build nor the test command has ever run successfully here. Two blockers, both local-machine setup rather than code defects:
+1. **`xcodebuild` is unusable** — `xcode-select` points at `/Library/Developer/CommandLineTools`. Xcode-beta is installed but not selected. *You must run this yourself:* `sudo xcode-select -s /Applications/Xcode-beta.app`
+2. **`Tools/bin/` is empty** — the only missing autotools prerequisite is `pkg-config` (`brew install pkg-config`); `autoconf`, `automake`, and GNU `libtool` are present.
+3. **No scheme is generated** — `project.yml` defines no `scheme:`, so whether `-scheme ip3gs` resolves via Xcode's autocreation is unverified. If it fails, add a scheme to `project.yml` rather than creating one by hand in Xcode.
 
-1. `xcodebuild` is unusable — `xcode-select` points at `/Library/Developer/CommandLineTools`. `/Applications/Xcode-beta.app` is installed but not selected. The user must run `sudo xcode-select -s /Applications/Xcode-beta.app` themselves.
-2. `./Tools/setup.sh` has not produced binaries — `Tools/bin/` exists but is empty. Of the four autotools prerequisites, `autoconf`, `automake`, and GNU `libtool` (as `glibtoolize`) **are** installed via Homebrew; only **`pkg-config` is missing**. `libimobiledevice` and `usbmuxd` are not installed either. (`STATUS.md` claims all four autotools are missing — that is out of date as of 2026-09-20; verify with `command -v` before trusting it.)
+**"No global/Homebrew installs" governs the shipped tool, not the dev machine.** Installing build-time dependencies locally is fine. What must hold is that the finished app carries its own `ideviceinfo`/`afcclient`, resolves them from its own bundle rather than `$PATH`, and runs on a Mac with no Homebrew. Do **not** satisfy `Tools/bin/` by symlinking Homebrew's libimobiledevice — those link against `/opt/homebrew` dylibs and break portability. Details in [`docs/architecture.md`](docs/architecture.md#binary-resolution-and-portability).
 
-**What "no global/Homebrew installs" actually means** (user clarification, 2026-09-20): the constraint governs the *shipped tool*, not the dev machine. Installing build-time dependencies locally for the POC is fine — the remaining unblock is `brew install pkg-config`. What must hold is that the finished app is **self-sufficient and portable**: it carries its own `ideviceinfo`/`afcclient`, resolves them from its own bundle (or `Tools/bin/` in dev builds) rather than `$PATH`, and runs on a Mac with no Homebrew and no libimobiledevice installed.
+## Architecture in one breath
 
-Practical consequence: **do not** satisfy `Tools/bin/` by symlinking Homebrew's `libimobiledevice` binaries. Those link against dylibs under `/opt/homebrew` and would break portability the moment the app leaves this machine. `Tools/setup.sh` builds from source precisely so the output can be made self-contained. A brew-installed binary is acceptable only as a throwaway crutch for a local dev loop — never as the thing that ships, and never committed to as the path forward without saying so out loud.
+`SwiftUI views` → `PhotoLibrary` (state + error rules) → `DeviceBridge` (device I/O) → `ProcessRunning` → vendored CLI binaries. Each layer is injectable at the boundary below it, so everything is testable with no phone attached. Full detail in [`docs/architecture.md`](docs/architecture.md).
 
-Also note `project.yml` defines no `scheme:`, so `xcodegen generate` writes no shared scheme — whether `-scheme ip3gs` resolves via Xcode's autocreation is unverified. If it fails, add a scheme to `project.yml` rather than creating one by hand in Xcode.
-
-## Architecture
-
-Three layers, each independently testable, deliberately kept thin (this is a POC — correctness and honest failure states over polish):
-
-1. **`DeviceBridge`** (`Sources/ip3gs/DeviceBridge/`) — the only code that touches the device. It shells out via `Process` to the vendored CLI binaries `ideviceinfo` and `afcclient`, located by path relative to the app's resource bundle (or `Tools/bin/` in dev builds) — never via `$PATH` or a system install, and never via C interop. This resolution rule is what makes the shipped app portable; see the prerequisites note above. All process execution goes through an injectable `ProcessRunning` protocol so parsing logic is unit-testable against captured sample output with no physical device.
-2. **`PhotoLibrary`** (`Sources/ip3gs/PhotoLibrary.swift`) — `ObservableObject` owning `[PhotoAsset]`, thumbnails, and download state. The sole consumer of `DeviceBridge`, and it consumes it through a `DeviceBridging` protocol so tests inject a fake. This is where the error rules live: not-connected / untrusted / per-file-failure-is-non-fatal.
-3. **SwiftUI views** (`Sources/ip3gs/`) — one window: status bar, `LazyVGrid` thumbnail grid, one "Download All" button. Stateless read of `PhotoLibrary`; no new business logic.
-
-Consequences of this shape worth knowing before editing:
-
-- `DeviceBridge`'s `binDir` and `runner` are `private`, so new methods go **inside** the existing `final class DeviceBridge { ... }` body, not in a separate extension — an extension can't reach them and won't compile.
-- No modals or alerts anywhere. Every state — including errors — surfaces as plain text in the status bar.
-- Download destination is hardcoded to `~/Pictures/ip3gs/`, chosen specifically to avoid folder-picker and sandbox-entitlement work.
-- `DeviceBridge`'s `afcclient`/`ideviceinfo` argument and output parsing is written against a *documented assumption*, not observed real-device output. Plan Task 7 exists to close that gap against real hardware; if reality differs, fix the parsing **and** update the test fixtures to match reality.
-
-## Project docs
-
-Specs and plans live under `docs/` (kept out of source dirs per the user's documentation rule):
-
-| Artifact | Path |
-|---|---|
-| Design spec (scope, constraints, out-of-scope) | `docs/superpowers/specs/2026-09-12-poc-photo-browser-design.md` |
-| Implementation plan (7 SPIDR/INVEST tasks) | `docs/superpowers/plans/2026-09-12-poc-photo-browser.md` |
-| Execution ledger | `.superpowers/sdd/2026-09-12-poc-photo-browser/progress.md` |
-| Live status / next step | `STATUS.md` (untracked) |
-
-The plan explicitly **disables TDD** for this POC: write the implementation, then a single verification test after the fact. Do not run red-green cycles here — this overrides the default `superpowers:test-driven-development` guidance for work on this plan.
-
-## Research
-
-For device/protocol behavior (how iOS ~6-era devices expose photo libraries over USB/AFC), prefer `deepwiki` when it is available in the session; it is not configured as a project-level MCP server, so fall back to web search if the tool isn't present.
-
+Three things that will trip you up: `DeviceBridge`'s `binDir`/`runner` are `private`, so new methods go **inside** the class body, never in an extension; there are no modals or alerts anywhere, every state is one status-bar string; and the device-parsing code is written against assumptions no hardware has confirmed.
 
 ## Atomic Commits
 After completing each task, create a git commit immediately. Do not batch multiple tasks into a single commit.
@@ -109,6 +91,5 @@ You are the most expensive tier. Your comparative advantage is decomposition, ju
 
 ## Housekeeping
 
-- A stash entry `stash@{0}` ("WIP on poc/photo-browser: 4dbd3f9") is left over from an interrupted step and has never been inspected. Do not assume it's disposable — look before dropping.
+- Stash entry `stash@{0}` ("WIP on poc/photo-browser: 4dbd3f9") is left over from an interrupted step and has never been inspected. Look before dropping.
 - `poc/photo-browser` is not merged to `main`.
-
