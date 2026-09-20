@@ -37,3 +37,10 @@ targets:
       - path: Tests/ip3gsTests
     dependencies:
       - target: ip3gs
+  ip3gsUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - path: Tests/ip3gsUITests
+    dependencies:
+      - target: ip3gs

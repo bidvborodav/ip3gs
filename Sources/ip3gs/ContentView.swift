@@ -10,9 +10,11 @@ struct ContentView: View {
             VStack(spacing: 6) {
                 Text(library.statusText)
                     .font(.callout)
+                    .accessibilityIdentifier("status")
                 if let progress = library.progress {
                     ProgressView(value: progress)
                         .accessibilityLabel("Progress")
+                        .accessibilityIdentifier("progress")
                 }
             }
             .padding(8)
@@ -31,6 +33,7 @@ struct ContentView: View {
             HStack {
                 Button("Refresh") { library.startRefresh() }
                     .disabled(library.isBusy)
+                    .accessibilityIdentifier("refresh")
                 Button("Download All") {
                     let destination = FileManager.default.homeDirectoryForCurrentUser
                         .appendingPathComponent("Pictures/ip3gs")
@@ -38,9 +41,11 @@ struct ContentView: View {
                     library.startDownloadAll(to: destination)
                 }
                 .disabled(library.assets.isEmpty || library.isBusy)
+                .accessibilityIdentifier("downloadAll")
                 if library.isBusy {
                     Button("Cancel") { library.cancel() }
                         .keyboardShortcut(.cancelAction)
+                        .accessibilityIdentifier("cancel")
                 }
             }
             .padding(8)
@@ -57,6 +62,7 @@ struct ContentView: View {
                 .aspectRatio(contentMode: .fill)
                 .frame(width: 100, height: 100)
                 .clipped()
+                .accessibilityIdentifier("thumbnail")
         } else {
             Rectangle()
                 .fill(Color.gray.opacity(0.2))
