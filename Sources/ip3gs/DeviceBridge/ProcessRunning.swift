@@ -1,6 +1,6 @@
 import Foundation
 
-protocol ProcessRunning {
+protocol ProcessRunning: Sendable {
     func run(_ executablePath: String, arguments: [String], stdin: String?) throws -> (stdout: Data, stderr: String, exitCode: Int32)
 }
 

@@ -50,27 +50,36 @@ final class DeviceIntegrationTests: XCTestCase {
         XCTAssertEqual(Array(data.suffix(2)), [0xFF, 0xD9], "JPEG EOI marker")
     }
 
-    func testFullLibraryRefreshAndDownloadAll() throws {
+    // Cold cache (a fresh temp cache root), then a warm refresh over the now-filled cache.
+    @MainActor
+    func testFullLibraryRefreshAndDownloadAll() async throws {
         _ = try connectedUDID()
-        let library = PhotoLibrary(bridge: bridge)
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let dir = base.appendingPathComponent("out")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: dir) }
+        defer { try? FileManager.default.removeItem(at: base) }
+        let library = PhotoLibrary(bridge: bridge, cacheRoot: base.appendingPathComponent("cache"))
 
         let refreshStart = Date()
-        library.refresh()
+        await library.refresh()
         let refreshSeconds = Date().timeIntervalSince(refreshStart)
 
         let downloadStart = Date()
-        library.downloadAll(to: dir)
+        await library.downloadAll(to: dir)
         let downloadSeconds = Date().timeIntervalSince(downloadStart)
 
+        let warmStart = Date()
+        await library.refresh()
+        let warmSeconds = Date().timeIntervalSince(warmStart)
+
         let files = try FileManager.default.contentsOfDirectory(atPath: dir.path)
-        let missingThumbs = library.assets.filter { library.thumbnails[$0.filename] == nil }.map(\.filename)
-        print("DEVICE_REPORT assets=\(library.assets.count) refreshSeconds=\(Int(refreshSeconds)) downloadSeconds=\(Int(downloadSeconds)) files=\(files.count) failed=\(library.failedDownloads) missingThumbs=\(missingThumbs) status=\(library.statusText)")
+        let videos = library.assets.filter(\.isVideo)
+        let missingThumbs = library.assets.filter { !$0.isVideo && library.thumbnails[$0.filename] == nil }.map(\.filename)
+        print("DEVICE_REPORT assets=\(library.assets.count) videos=\(videos.count) refreshSeconds=\(Int(refreshSeconds)) downloadSeconds=\(Int(downloadSeconds)) totalSeconds=\(Int(refreshSeconds + downloadSeconds)) warmRefreshSeconds=\(Int(warmSeconds)) files=\(files.count) failed=\(library.failedDownloads) missingThumbs=\(missingThumbs)")
 
         XCTAssertFalse(library.assets.isEmpty)
         XCTAssertEqual(files.count, library.assets.count - library.failedDownloads.count)
+        XCTAssertTrue(missingThumbs.isEmpty, "every photo (not video) gets a thumbnail")
     }
 
     func testMissingFileFailsCleanly() throws {

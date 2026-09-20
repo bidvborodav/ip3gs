@@ -7,11 +7,17 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Text(library.statusText)
-                .font(.callout)
-                .padding(8)
-                .frame(maxWidth: .infinity)
-                .background(Color(nsColor: .controlBackgroundColor))
+            VStack(spacing: 6) {
+                Text(library.statusText)
+                    .font(.callout)
+                if let progress = library.progress {
+                    ProgressView(value: progress)
+                        .accessibilityLabel("Progress")
+                }
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity)
+            .background(Color(nsColor: .controlBackgroundColor))
 
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 8) {
@@ -22,17 +28,25 @@ struct ContentView: View {
                 .padding(8)
             }
 
-            Button("Download All") {
-                let destination = FileManager.default.homeDirectoryForCurrentUser
-                    .appendingPathComponent("Pictures/ip3gs")
-                try? FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
-                library.downloadAll(to: destination)
+            HStack {
+                Button("Refresh") { library.startRefresh() }
+                    .disabled(library.isBusy)
+                Button("Download All") {
+                    let destination = FileManager.default.homeDirectoryForCurrentUser
+                        .appendingPathComponent("Pictures/ip3gs")
+                    try? FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+                    library.startDownloadAll(to: destination)
+                }
+                .disabled(library.assets.isEmpty || library.isBusy)
+                if library.isBusy {
+                    Button("Cancel") { library.cancel() }
+                        .keyboardShortcut(.cancelAction)
+                }
             }
             .padding(8)
-            .disabled(library.assets.isEmpty)
         }
         .frame(minWidth: 400, minHeight: 500)
-        .onAppear { library.refresh() }
+        .onAppear { library.startRefresh() }
     }
 
     @ViewBuilder
@@ -47,6 +61,13 @@ struct ContentView: View {
             Rectangle()
                 .fill(Color.gray.opacity(0.2))
                 .frame(width: 100, height: 100)
+                .overlay {
+                    if asset.isVideo {
+                        Image(systemName: "video")
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel("Video")
+                    }
+                }
         }
     }
 }

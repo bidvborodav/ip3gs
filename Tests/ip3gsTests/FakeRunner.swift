@@ -4,9 +4,9 @@ import Foundation
 typealias RunResult = (stdout: Data, stderr: String, exitCode: Int32)
 
 struct FakeRunner: ProcessRunning {
-    let handler: (_ arguments: [String], _ stdin: String?) -> RunResult
+    let handler: @Sendable (_ arguments: [String], _ stdin: String?) -> RunResult
 
-    init(handler: @escaping (_ arguments: [String], _ stdin: String?) -> RunResult) {
+    init(handler: @escaping @Sendable (_ arguments: [String], _ stdin: String?) -> RunResult) {
         self.handler = handler
     }
 
@@ -19,7 +19,7 @@ struct FakeRunner: ProcessRunning {
     }
 }
 
-final class Recorder {
+final class Recorder: @unchecked Sendable {
     var arguments: [String] = []
     var stdin: String?
 }

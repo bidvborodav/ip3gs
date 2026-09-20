@@ -20,6 +20,7 @@ struct PhotoCache: Sendable {
         let partial = directory.appendingPathComponent(".partial")
         let fm = FileManager.default
         try? fm.removeItem(at: partial)
+        defer { try? fm.removeItem(at: partial) }
         guard (try? fm.createDirectory(at: partial, withIntermediateDirectories: true)) != nil,
               bridge.download(asset, to: partial),
               (try? fm.moveItem(at: partial.appendingPathComponent(asset.filename), to: file(for: asset))) != nil

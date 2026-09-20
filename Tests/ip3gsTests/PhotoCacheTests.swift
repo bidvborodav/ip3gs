@@ -62,6 +62,20 @@ final class PhotoCacheTests: XCTestCase {
         XCTAssertFalse(cache.contains(asset))
     }
 
+    func testNoPartialDirectoryIsLeftBehindAfterSuccessOrFailure() {
+        let bridge = CountingBridge()
+        let cache = makeCache()
+        let partial = cache.directory.appendingPathComponent(".partial").path
+
+        _ = cache.fill(asset, using: bridge)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: partial))
+
+        bridge.succeeds = false
+        let other = PhotoAsset(id: "IMG_0002.JPG", filename: "IMG_0002.JPG", remotePath: "/DCIM/100APPLE/IMG_0002.JPG")
+        _ = cache.fill(other, using: bridge)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: partial))
+    }
+
     func testStalePartialFromAnInterruptedRunIsNotAHit() throws {
         let cache = makeCache()
         let partial = cache.directory.appendingPathComponent(".partial")

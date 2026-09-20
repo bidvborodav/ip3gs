@@ -6,7 +6,7 @@ enum DeviceState: Equatable {
     case connected(udid: String)
 }
 
-final class DeviceBridge {
+final class DeviceBridge: Sendable {
     private let binDir: String
     private let runner: ProcessRunning
 
