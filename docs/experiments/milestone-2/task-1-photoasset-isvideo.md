@@ -3,7 +3,7 @@
 **Files:** modify `Sources/ip3gs/DeviceBridge/PhotoAsset.swift`; test in a new
 `Tests/ip3gsTests/PhotoAssetTests.swift`.
 
-- [ ] **Step 1: Implement.** One definition, used by the library (skip thumbnails) and the view
+- [x] **Step 1: Implement.** One definition, used by the library (skip thumbnails) and the view
   (glyph):
 
 ```swift
@@ -16,7 +16,7 @@ struct PhotoAsset: Identifiable, Equatable {
 }
 ```
 
-- [ ] **Step 2: Test.**
+- [x] **Step 2: Test.**
 
 ```swift
 import XCTest
@@ -38,7 +38,7 @@ final class PhotoAssetTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 3: Run** `... test -only-testing:ip3gsTests/PhotoAssetTests` → passes.
-- [ ] **Step 4: Commit** `feat: flag video assets` (stage the two files only).
+- [x] **Step 3: Run** `... test -only-testing:ip3gsTests/PhotoAssetTests` → passes.
+- [x] **Step 4: Commit** `feat: flag video assets` (stage the two files only).
 
 Back to the [milestone 2 plan](README.md).

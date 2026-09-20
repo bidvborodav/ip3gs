@@ -18,23 +18,30 @@ when an assumption is confirmed or corrected, move the finding into
 
 | # | Question | Where it bites if wrong |
 |---|---|---|
-| 1 | ~~Does `ideviceinfo` emit `error code -18`?~~ **Settled (source):** no — `… lockdownd: <text> (<code>)`. **Open (hardware):** which code an *untrusted* 3GS reports. Needs an unpaired phone. | Trust detection degrades to "No device connected" if the phone reports a code outside {-17,-18,-19,-21} |
+| 1 | ~~Does `ideviceinfo` emit `error code -18`?~~ **Settled (source):** no — `… lockdownd: <text> (<code>)`. **Partly settled (hardware):** a real 3GS returned `Invalid HostID (-21)` once, transiently, while trusted ([`domain.md`](domain.md#failure-modes-that-matter)). **Open:** which code a genuinely unpaired 3GS reports, and whether iOS 6 has an untrusted state at all. Needs an unpaired phone — the user's action. | Trust detection degrades to "No device connected" if the phone reports a code outside {-17,-18,-19,-21} |
 | 2 | ~~Is `UniqueDeviceID:` the stdout key?~~ **Confirmed on hardware:** `UniqueDeviceID: <40 hex>`. | — |
 | 3 | ~~Does `afcclient` list bare names?~~ **Confirmed on hardware** (via stdin, prompts stripped). | — |
 | 4 | ~~Do downloads survive as binary?~~ **Confirmed on hardware:** `get -f` writes byte-correct JPEGs (SOI/EOI intact, 169 of 169). | — |
 | 5 | Are photos confined to `/DCIM/100APPLE`? **True for the test phone** (single roll). **Open:** a phone with >1 roll. | Photos beyond the first roll silently missed |
 | 6 | ~~Does AFC expose a cheap thumbnail?~~ **Settled:** only as packed `.ithmb` containers ([`domain.md`](domain.md#photo-library-layout)); needs a decoder. | — |
-| 7 | **New:** are `.MOV` files worth listing? They are pulled whole for thumbnails and downloads. | Wasted time and disk; tolerable for the POC |
+| 7 | ~~Are `.MOV` files worth pulling for thumbnails?~~ **Settled (milestone 2):** no — they are listed and downloaded but never thumbnailed. | — |
+| 8 | **New:** is filename a safe cache key? The cache is `udid` + filename with no size/mtime check. **[assumed]** iOS never reuses `IMG_nnnn` for different content on one device. Not exercised: needs a phone where a photo was deleted and another taken. | Stale thumbnail or a stale file copied by Download All |
+| 9 | **New:** why did the phone reject this Mac with `Invalid HostID (-21)` mid-session and recover ~20 s later? **[assumed]** contention from another client on the device (Finder lists the phone); not established. | The app tells a trusted user to "Trust this computer" (misleading), and per-file pulls in that window fail |
 
-**Measured on hardware** (169 files, USB, one phone): `refresh()` 77 s,
-`downloadAll` 79 s — each **blocking the calling thread**, i.e. the SwiftUI
-window would freeze for over a minute at launch and again on "Download All".
-This is the synchronous shortcut noted in [Task 5](experiments/task-5-photo-library.md),
-now quantified.
+**Measured on hardware** (169 files, USB, one phone, 2026-09-20). Milestone 1:
+`refresh()` 77 s + `downloadAll` 79 s, each blocking the main thread. Milestone
+2, cold cache, off the main thread: **refresh 74 s + Download All 6 s = 80 s**, warm
+refresh 3–5 s, 169 of 169 files, 0 failed. An earlier milestone-2 run the same day
+took 152 s + 8 s = 160 s. Raw `afcclient` gets in a shell right after it averaged
+~0.96 s over 4 files (then the transient `-21`, #9), and ~0.69 s over 20 files once
+the phone recovered; the 80 s run worked out at ~0.45 s per file. Per-file cost
+tracks the device's state, not the app's code, so quote timings as a range
+(80–160 s), not a constant.
 
 Fixtures in the unit tests are shaped after the tool's *source*, and the
-listing/download shape has since been confirmed against a real device; the
-untrusted-state fixture is still source-derived.
+listing/download shape has since been confirmed against a real device. Of the
+untrusted-state fixtures, only `Invalid HostID (-21)` is a real capture; the
+-17/-18/-19 ones are source-derived.
 
 ## How to settle them
 

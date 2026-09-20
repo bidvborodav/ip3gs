@@ -41,13 +41,25 @@ so this plan keeps that method exactly as it is.
 
 ## Done when
 
-- [ ] Launched from Finder (`open`, cwd `/`) with the phone attached, the window never freezes.
-- [ ] Thumbnails appear incrementally while the grid is still loading.
-- [ ] All 169 files reach `~/Pictures/ip3gs/`; refresh + download total in the ~80 s range.
-- [ ] Cancel stops cleanly (no crash, no half-written files, status says how far it got).
-- [ ] Both bundled binaries link only system libraries.
-- [ ] The window was launched and looked at (grid, status text, buttons).
-- [ ] Untrusted path tried, or recorded as unreachable on this device (needs the user).
+Status as of 2026-09-20. Evidence is in [task 5](task-5-bundle-the-binaries.md) and
+[task 6](task-6-verify-on-device.md).
+
+- [x] Launched from Finder-style `open` (cwd `/`) with the phone attached, the window never
+  freezes — the UI test's accessibility queries were answered throughout a 72.7 s cold load.
+  *Not literally double-clicked in Finder.*
+- [x] Thumbnails appear incrementally while the grid is still loading (screenshot at "Loading 143
+  of 163…", and asserted by the UI test).
+- [~] All 169 files reach the destination; refresh + download total in the ~80 s range —
+  **169 of 169, 0 failed, 80 s cold** in the integration test, into a temp directory. A slower
+  spell gave 160 s (device variance, see `research.md`). *The real "Download All" button was not
+  clicked, so `~/Pictures/ip3gs` was not written by this milestone.*
+- [x] Cancel stops cleanly — UI test (during load, then Refresh resumes) and unit tests (load and
+  download; complete files only, no `.partial` left). *Download cancel is unit-tested, not
+  UI-tested.*
+- [x] Both bundled binaries link only system libraries (`otool -L` on the copies inside the app).
+- [x] The window was launched and looked at (grid, status text, progress bar, video glyph, buttons).
+- [ ] Untrusted path — **still open.** Only a transient `Invalid HostID (-21)` on a trusted phone
+  was observed; a genuinely unpaired phone needs the user (task 7).
 
 ## Judgement calls made (change any of these before executing)
 
@@ -57,7 +69,7 @@ so this plan keeps that method exactly as it is.
 | Cache key is `udid` + filename, no size/mtime check | `ls` returns bare names only. **[assumed]** iOS never reuses `IMG_nnnn` for different content on one device. Recorded in `research.md`. |
 | Cache fills via a temp `.partial` dir, then `moveItem` | A kill mid-`get` must never leave a truncated file that later counts as a cache hit. |
 | Cancel is checked **between files** | Worst-case latency is one file (~0.5 s). Killing `afcclient` mid-transfer is more code for no user-visible gain. |
-| Thumbnails are downsampled to 200 px (Task 4) | Otherwise 163 full 2048x1536 JPEGs (~160 MB) sit in memory and each grid redraw re-decodes them — the kind of jank this milestone exists to remove. Drop Task 4 if Task 6 shows the window is fine without it. |
+| Thumbnails are downsampled to 200 px (Task 4) | Otherwise 163 full 2048x1536 JPEGs (~160 MB) sit in memory and each grid redraw re-decodes them — the kind of jank this milestone exists to remove. *Kept:* it is small, tested, and removes a known cost; memory and scroll smoothness were never benchmarked. |
 | Add a **Refresh** button | Without it, Cancel during the first load is a dead end and a re-plugged phone needs an app relaunch. |
 | Progress = status string **plus** a `ProgressView` bar | Keeps the "one status-bar string" rule; the bar is the standard determinate-progress control (Apple HIG). |
 | `downloadThumbnail` is deleted, not kept | The cache makes it dead code (YAGNI). Its tests are replaced, not ported. |

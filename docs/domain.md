@@ -74,14 +74,21 @@ and 6 `IMG_*.MOV`. Listing is bare names, one per line.
 miss photos on a well-used device. Not exercised: this phone has a single
 roll. A known, accepted POC limitation.
 
-**Videos share the roll.** `.MOV` files are listed like photos, so the POC
-lists, "thumbnails" and downloads them too (whole file each time).
+**Videos share the roll.** `.MOV` files are listed like photos. The app lists
+and downloads them, but does **not** pull them for grid thumbnails (the tile is
+a placeholder with a video glyph); on the test phone that is 6 of 169 files.
+They are pulled once, straight to the destination, by Download All.
 
 **Thumbnails.** AFC does expose on-device thumbnails, but as packed
 `/PhotoData/Thumbnails/{79x79,120x120}.ithmb` container files indexed by
 `/PhotoData/Photos.sqlite`, not one JPEG per photo — using them means writing
-an `.ithmb` decoder. The POC instead pulls each full-resolution JPEG (measured: 169 files in
-77 s, ~0.5 s each) and uses it as its own thumbnail.
+an `.ithmb` decoder. The app instead pulls each full-resolution JPEG **once**
+into a per-device cache, downsamples it for the grid, and reuses the cached file
+for Download All. **Measured (2026-09-20, 169 files, one phone):** cold
+refresh 74 s (163 JPEGs, ~0.45 s each) + Download All 6 s (6 videos pulled, 163
+copied) = 80 s; a warm refresh takes 3–5 s. Per-file device time is **not
+constant**: an earlier run the same day took 152 s + 8 s = 160 s (~0.93 s per
+file, confirmed with raw `afcclient` gets in a shell, so not app overhead).
 
 ## Failure modes that matter
 
@@ -94,11 +101,24 @@ things from the user:
 | Connected, not trusted | Tap "Trust" on the iPhone, then retry | lockdownd error code in {-17, -18, -19, -21} — code list verified from source; **[assumed]** that a real 3GS reports one of these |
 | Connected and paired | Nothing | `UniqueDeviceID: <40 hex>` present in `ideviceinfo` stdout (observed) |
 
-The *untrusted* row is the only one never observed on hardware: it needs a
-phone that has not paired with this Mac, or one whose pairing was reset.
-Which code a real, untrusted 3GS reports is the most fragile assumption left
-in trust detection. If it misbehaves on hardware, look at
-`untrustedLockdownCodes` in `DeviceBridge.swift` first.
+The *untrusted* row has only been seen once on hardware, and not the way it was
+planned. On 2026-09-20, partway through a long session on an already-trusted
+phone, `ideviceinfo` and `afcclient` began failing with
+`ERROR: Could not connect to lockdownd: Invalid HostID (-21)`. About 20 s later
+the same phone accepted this Mac again with no action from anyone. So:
+
+- **-21 is real** and is in the untrusted set (fixture in
+  `DeviceBridgeConnectionTests`, exit code not captured).
+- **It can be transient on a trusted phone**, in which case the app shows
+  "Trust this computer on the iPhone" although nothing needs trusting.
+  **[assumed]** cause: something else talking to the device at the same time
+  (Finder shows the phone in its sidebar); not established.
+- **-17/-18/-19 remain source-derived.** **[assumed, from memory]** the "Trust
+  This Computer" dialog arrived in iOS 7, so an iOS 6.1.6 3GS may never present
+  a genuine untrusted state; this is unconfirmed.
+
+If trust detection misbehaves, look at `untrustedLockdownCodes` in
+`DeviceBridge.swift` first.
 
 ## Portability constraint
 

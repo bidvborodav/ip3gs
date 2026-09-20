@@ -1,7 +1,7 @@
 # Experiment: POC photo browser & downloader
 
-**Branch:** `poc/photo-browser` (not merged to `main`)
-**Status as of:** 2026-09-20 (milestone 1 reached; Task 7 verified on hardware except the untrusted path)
+**Branch:** `poc/milestone-2-usable` (from `worktree-poc-milestone-1`, from `poc/photo-browser`; none merged to `main`)
+**Status as of:** 2026-09-20 (milestone 2 implemented and verified on hardware; open items below)
 
 ## Goal
 
@@ -73,14 +73,29 @@ TEST_RUNNER_IP3GS_DEVICE=1 xcodebuild -project ip3gs.xcodeproj -scheme ip3gs \
 **Not verified:** the SwiftUI window itself was never launched or seen (no way
 to drive the GUI from the session), and the untrusted-device path.
 
+## Milestone 2 — "usable POC" (done, two items open)
+
+The app launches from Finder-style `open` (cwd `/`) and stays responsive with the phone
+attached. Plan, per-task briefs, results and deviations: [`milestone-2/`](milestone-2/README.md).
+Verified on a real 3GS: 169 of 169 files, cold 80 s (a slower device spell gave 160 s), cancel
+clean, window seen, 44 unit tests + 5 device integration tests + 2 XCUITests passing.
+
+**Open:**
+
+1. A **Download All click in the real window** — not UI-tested because the destination is
+   hardcoded to `~/Pictures/ip3gs/`, where the user's earlier 169 files already sit and would be
+   overwritten. Download All itself is verified by the integration test (into a temp dir).
+2. The **untrusted path** — only a transient `Invalid HostID (-21)` on a trusted phone was
+   observed ([`../research.md`](../research.md)); a genuinely unpaired phone is the user's action.
+
 ## Next step
 
-**Milestone 2 — "usable POC"** (branch `poc/milestone-2-usable`, from milestone 1): the app
-launches from Finder and stays responsive with the phone attached. Plan, task list and the
-judgement calls to review: [`milestone-2/`](milestone-2/README.md). Milestone 3 is the
-native sync app's Phase 0 spikes (one `afcclient` session doing many `get`s vs one spawn per file).
+**Milestone 3 — native sync app, Phase 0 spikes.** The main one: time one `afcclient` session
+doing many `get` commands against one spawn per file. That decides whether in-process
+`libimobiledevice` is ever needed. It would change the per-file shape of
+`DeviceBridging.download`, which milestone 2 deliberately left alone.
 
-The list below is the original gap analysis the plan answers:
+<details><summary>The original gap analysis milestone 2 answered</summary>
 
 1. **Unblock the UI.** `refresh()` and `downloadAll` each block for ~77–79 s on
    169 files (measured). Move them off the main thread and publish results
@@ -91,6 +106,8 @@ The list below is the original gap analysis the plan answers:
 3. Launch the app and eyeball the grid; try the untrusted path on a phone that
    has not paired with this Mac.
 4. Decide about `.MOV` (filter, or download deliberately).
+
+</details>
 
 ## Housekeeping
 

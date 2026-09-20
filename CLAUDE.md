@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Hobby project: a local macOS app to browse, download, and manage the photo library on an iPhone 3GS from a modern Mac, since the current sync stack (iTunes/Photos/Image Capture) doesn't support this device anymore.
 
-**Current state:** POC milestone 1 reached (2026-09-20): portable binaries build, Tasks 1–6 are implemented, `xcodebuild build` and `test` pass, and the device path is **verified on a real iPhone 3GS** (connect, list, download all 169 files, 0 failures). Known gaps: the UI blocks ~77 s on refresh and ~79 s on download (synchronous), the untrusted-device path and the GUI itself were never observed, and the app can't find its binaries outside the repo root. Work is on worktree branch `worktree-poc-milestone-1`, cut from `poc/photo-browser`. Next steps: [`docs/experiments/README.md`](docs/experiments/README.md#next-step).
+**Current state:** POC milestone 2 ("usable POC") implemented (2026-09-20) on branch `poc/milestone-2-usable`, cut from `worktree-poc-milestone-1` (milestone 1, itself cut from `poc/photo-browser`; neither is merged). The window no longer freezes: refresh and download run off the main thread with per-file progress and a Cancel button; each photo is pulled once into a cache (`~/Library/Caches/ip3gs/<udid>/`) and reused by "Download All" (measured: cold refresh 74 s + download 6 s = 80 s for 169 files, down from ~156 s); videos are not thumbnailed; both binaries are bundled into `ip3gs.app/Contents/MacOS` and link only system libraries. Verified on a real 3GS by integration tests and XCUITests, and the window was seen. Still open: a *Download All* click in the real window, and the untrusted path ([`docs/research.md`](docs/research.md)). Next: [`docs/experiments/README.md`](docs/experiments/README.md#next-step).
 
 ## Documentation
 
@@ -33,7 +33,8 @@ xcodebuild -project ip3gs.xcodeproj -scheme ip3gs -destination 'platform=macOS' 
 xcodebuild -project ip3gs.xcodeproj -scheme ip3gs -destination 'platform=macOS' test \
   -only-testing:ip3gsTests/<TestClassName>      # single test class
 # Against a real phone (skipped otherwise): prefix with TEST_RUNNER_IP3GS_DEVICE=1
-#   ... test -only-testing:ip3gsTests/DeviceIntegrationTests
+#   ... test -only-testing:ip3gsTests/DeviceIntegrationTests   # ~80 s, prints DEVICE_REPORT timings
+#   ... test -only-testing:ip3gsUITests                        # launches the app, takes over the screen
 ```
 
 `ip3gs.xcodeproj` is gitignored — it does not exist in a fresh clone. Never hand-edit it; edit `project.yml` and re-run `xcodegen generate`.
@@ -42,11 +43,11 @@ xcodebuild -project ip3gs.xcodeproj -scheme ip3gs -destination 'platform=macOS' 
 
 1. `xcode-select` points at `/Applications/Xcode-beta.app`. The scheme `ip3gs` resolves without a `scheme:` in `project.yml`.
 2. Build-time tools: `autoconf`, `automake`, `pkg-config`, and Homebrew `openssl@3` (only its static `.a` files are used; nothing from Homebrew is linked dynamically).
-3. `Tools/bin/` is gitignored, so **each worktree/clone must run `./Tools/setup.sh` itself** (~3 min, clones five upstream repos).
+3. `Tools/bin/` is gitignored, so **each worktree/clone must run `./Tools/setup.sh` itself** (~3 min, clones five upstream repos), or copy it from another checkout. The build copies both binaries into the app, so `xcodebuild` (and `xcodegen`'s file references) need `Tools/bin/` populated **before** building.
 
 `setup.sh` builds libplist → libimobiledevice-glue → libtatsu → libusbmuxd → libimobiledevice **statically**; `setup_test.sh` fails if either binary links anything outside system frameworks. Passing this gate means the binaries are portable — but see the two traps in [`docs/domain.md`](docs/domain.md#tool-interfaces-verified-from-source): `afcclient` is an interactive shell, not a subcommand CLI.
 
-Known gap: `DeviceBridge` defaults `binDir` to the relative `Tools/bin`, which only resolves when the app's working directory is the repo root. Bundling the binaries into the app (architecture rule) is not done yet.
+`DeviceBridge` resolves the binaries from the app bundle (`Bundle.main.url(forAuxiliaryExecutable:)`), so the app runs from Finder. In `project.yml` the copy is declared **on the source entries** (`buildPhase: copyFiles` + `attributes: [CodeSignOnCopy]`); a target-level `copyFiles:` key is silently ignored by xcodegen 2.44.1.
 
 **"No global/Homebrew installs" governs the shipped tool, not the dev machine.** Installing build-time dependencies locally is fine. What must hold is that the finished app carries its own `ideviceinfo`/`afcclient`, resolves them from its own bundle rather than `$PATH`, and runs on a Mac with no Homebrew. Do **not** satisfy `Tools/bin/` by symlinking Homebrew's libimobiledevice — those link against `/opt/homebrew` dylibs and break portability. Details in [`docs/architecture.md`](docs/architecture.md#binary-resolution-and-portability).
 
@@ -54,7 +55,7 @@ Known gap: `DeviceBridge` defaults `binDir` to the relative `Tools/bin`, which o
 
 `SwiftUI views` → `PhotoLibrary` (state + error rules) → `DeviceBridge` (device I/O) → `ProcessRunning` → vendored CLI binaries. Each layer is injectable at the boundary below it, so everything is testable with no phone attached. Full detail in [`docs/architecture.md`](docs/architecture.md).
 
-Three things that will trip you up: `DeviceBridge`'s `binDir`/`runner` are `private`, so new methods go **inside** the class body, never in an extension; there are no modals or alerts anywhere, every state is one status-bar string; and the device-parsing code is confirmed on hardware for the trusted path only — the untrusted-device path is still source-derived (marked **[assumed]**).
+Three things that will trip you up: `DeviceBridge`'s `binDir`/`runner` are `private`, so new methods go **inside** the class body, never in an extension; there are no modals or alerts anywhere, every state is one status-bar string (plus a progress bar while busy); `PhotoLibrary` is `@MainActor` and runs each blocking bridge call off the main thread, one at a time — never call the bridge from the main actor; and the untrusted-device path is only partly confirmed on hardware (one real `-21`, see `docs/research.md`).
 
 ## Atomic Commits
 After completing each task, create a git commit immediately. Do not batch multiple tasks into a single commit.

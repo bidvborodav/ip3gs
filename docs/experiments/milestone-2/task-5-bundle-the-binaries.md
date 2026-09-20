@@ -2,24 +2,31 @@
 
 **Files:** modify `project.yml`, `Sources/ip3gs/DeviceBridge/DeviceBridge.swift`; add a small test.
 
-- [ ] **Step 1: `project.yml`** — under `targets.ip3gs`, add:
+- [x] **Step 1: `project.yml`** — under `targets.ip3gs.sources`, add:
 
 ```yaml
-    copyFiles:
-      - destination: executables
-        files:
-          - path: Tools/bin/ideviceinfo
-            codeSign: true
-          - path: Tools/bin/afcclient
-            codeSign: true
+      - path: Tools/bin/ideviceinfo
+        buildPhase:
+          copyFiles:
+            destination: executables
+        attributes: [CodeSignOnCopy]
+      - path: Tools/bin/afcclient
+        buildPhase:
+          copyFiles:
+            destination: executables
+        attributes: [CodeSignOnCopy]
 ```
 
-  `executables` is `Contents/MacOS`, the conventional home for helper executables, and
-  `codeSign: true` re-signs them with the app's identity so hardened runtime accepts them. The
-  build now **requires** `Tools/bin/` to exist — run `./Tools/setup.sh` after a fresh clone (this
-  goes in `CLAUDE.md` in Task 8).
+  > **Deviation from the plan as first written.** The plan said to use a target-level
+  > `copyFiles:` key with `codeSign: true`. xcodegen 2.44.1 **silently ignores** that key: the
+  > build succeeded and the app simply had no helpers. Caught by listing `Contents/MacOS` after the
+  > build, not by the build. The copy phase is declared on the *source entries* instead.
 
-- [ ] **Step 2: Resolve from the bundle.** In `DeviceBridge`:
+  `executables` is `Contents/MacOS`, the conventional home for helper executables, and
+  `CodeSignOnCopy` re-signs them with the app's identity so hardened runtime accepts them. The
+  build now **requires** `Tools/bin/` to exist — run `./Tools/setup.sh` after a fresh clone.
+
+- [x] **Step 2: Resolve from the bundle.** In `DeviceBridge`:
 
 ```swift
 // Helpers are copied next to the app executable at build time; fall back to the repo path when
@@ -32,7 +39,7 @@ static var bundledBinDir: String {
 init(binDir: String = DeviceBridge.bundledBinDir, runner: ProcessRunning = SystemProcessRunner()) {
 ```
 
-- [ ] **Step 3: Build and inspect the product.**
+- [x] **Step 3: Build and inspect the product.**
 
 ```bash
 xcodegen generate
@@ -45,9 +52,13 @@ codesign --verify --deep --strict $APP && echo signed-ok
 
   Expected: both helpers present and executable; `otool` lists only `/usr/lib` and
   `/System/Library` paths (no `/opt/homebrew`, `/usr/local`, `/var/folders`); `signed-ok`.
-  Paste the `otool` output into the Task 8 doc update as the evidence for the done-when line.
+  **Observed (2026-09-20):** `Contents/MacOS` held `ip3gs`, `ideviceinfo`, `afcclient`. Both
+  helpers list exactly `/usr/lib/libSystem.B.dylib`,
+  `/System/Library/Frameworks/SystemConfiguration.framework/…` and
+  `/System/Library/Frameworks/CoreFoundation.framework/…` — nothing else. `codesign --verify
+  --deep --strict` passed; the helpers carry an ad-hoc signature (they were re-signed on copy).
 
-- [ ] **Step 4: Prove it runs away from the repo root.**
+- [x] **Step 4: Prove it runs away from the repo root.**
 
 ```bash
 APP_ABS="$(pwd)/build/Build/Products/Debug/ip3gs.app"
@@ -58,8 +69,10 @@ cd / && open -n "$APP_ABS"
   not the repo, so the old relative `Tools/bin` path cannot resolve. The window should show the
   connected phone's photos; if it shows "No device connected" with the phone attached, the helper
   lookup or signing is wrong — check Console for `ip3gs` launch errors before changing code.
-  (Return to the worktree directory afterwards; the shell's cwd persists.)
+  **Observed:** `ps` showed the app's parent as launchd (pid 1) and `lsof` showed its cwd as `/`;
+  it found the phone and loaded the photos. (`open` alone is enough — LaunchServices starts apps
+  with cwd `/` — so no `cd /` is needed.)
 
-- [ ] **Step 5: Run the full unit suite**, then commit `feat: bundle ideviceinfo and afcclient into the app`.
+- [x] **Step 5: Run the full unit suite**, then commit `feat: bundle ideviceinfo and afcclient into the app`.
 
 Back to the [milestone 2 plan](README.md).

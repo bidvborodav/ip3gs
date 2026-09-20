@@ -5,7 +5,7 @@
 The cache takes the bridge only for the miss path, so it is testable with a fake bridge and a
 temp directory.
 
-- [ ] **Step 1: Implement.**
+- [x] **Step 1: Implement.**
 
 ```swift
 import Foundation
@@ -48,7 +48,7 @@ struct PhotoCache: Sendable {
 }
 ```
 
-- [ ] **Step 2: Tests** (temp dir per test, a small fake `DeviceBridging` that writes bytes into the
+- [x] **Step 2: Tests** (temp dir per test, a small fake `DeviceBridging` that writes bytes into the
   `directory` it is handed and counts calls). Cover:
   1. `fill` on a miss calls `bridge.download` once and returns a file with the fake's bytes.
   2. `fill` on a hit does **not** call the bridge.
@@ -61,7 +61,7 @@ struct PhotoCache: Sendable {
   `DeviceBridging` still has `downloadThumbnail` at this point — the fake must implement it
   (Task 3a deletes it).
 
-- [ ] **Step 3: Run** `-only-testing:ip3gsTests/PhotoCacheTests` → passes.
-- [ ] **Step 4: Commit** `feat: add per-device photo cache`.
+- [x] **Step 3: Run** `-only-testing:ip3gsTests/PhotoCacheTests` → passes.
+- [x] **Step 4: Commit** `feat: add per-device photo cache`.
 
 Back to the [milestone 2 plan](README.md).

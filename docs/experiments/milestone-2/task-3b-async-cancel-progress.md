@@ -1,14 +1,23 @@
 # Task 3b: async, cancellable, with progress
 
+> **Deviations, as built.** `isBusy` derives from the stored `Task` (a `@Published` private
+> property), not from `progress`, so `refresh()`/`downloadAll()` can reset their own progress bar
+> when called directly by tests. `DeviceBridge` is declared `Sendable` on the class itself (a
+> retroactive conformance in another file is a warning). The responsiveness and incremental tests
+> are one test. The responsiveness test was **mutation-checked**: making `offMain` run inline made
+> it fail with every tick seeing all 20 thumbnails and `refresh` already finished. Testing also
+> found `PhotoCache.fill` left an empty `.partial` directory after every successful pull; fixed
+> with a `defer` and covered in `PhotoCacheTests`.
+
 **Files:** modify `PhotoLibrary.swift`, `ContentView.swift`, `ip3gsApp.swift` (only if the
 `@StateObject` init needs `@MainActor` help), `PhotoLibraryTests.swift`.
 
-- [ ] **Step 1: Make the seams `Sendable`.** `protocol DeviceBridging: Sendable`,
+- [x] **Step 1: Make the seams `Sendable`.** `protocol DeviceBridging: Sendable`,
   `protocol ProcessRunning: Sendable`. `DeviceBridge` is a final class of `let`s, so it conforms
   as-is once `ProcessRunning` is `Sendable`. Test doubles that hold mutable state are
   `@unchecked Sendable` (they are only touched serially).
 
-- [ ] **Step 2: Rewrite the `PhotoLibrary` class.** Work methods are `async` and cancellable via
+- [x] **Step 2: Rewrite the `PhotoLibrary` class.** Work methods are `async` and cancellable via
   the surrounding `Task`; thin `start…` wrappers own the `Task` so views never touch concurrency.
 
 ```swift
@@ -106,7 +115,7 @@ final class PhotoLibrary: ObservableObject {
   Note `thumbnails[...] = nil` for a failed pull is a no-op assignment of `nil` — fine, the tile
   stays a placeholder.
 
-- [ ] **Step 3: `ContentView`.**
+- [x] **Step 3: `ContentView`.**
   - Under the status text: `if let progress = library.progress { ProgressView(value: progress) }`
     with 8 pt horizontal padding.
   - Bottom bar becomes an `HStack`: **Refresh** (`library.startRefresh()`), **Download All**
@@ -117,7 +126,7 @@ final class PhotoLibrary: ObservableObject {
   - Placeholder tile: for `asset.isVideo` overlay `Image(systemName: "video")` in `.secondary`;
     give it `.accessibilityLabel("Video")`.
 
-- [ ] **Step 4: Tests** (`@MainActor final class PhotoLibraryTests`, `async` test methods; call
+- [x] **Step 4: Tests** (`@MainActor final class PhotoLibraryTests`, `async` test methods; call
   `await library.refresh()` directly — the `start…` wrappers stay thin and untested).
   1. Existing behaviour tests converted to `await`.
   2. **Responsiveness:** fake bridge whose `download` does `Thread.sleep(forTimeInterval: 0.05)`
@@ -139,8 +148,8 @@ final class PhotoLibrary: ObservableObject {
      `.partial` directory is left in the cache.
   6. `startRefresh()` while busy is a no-op (bridge `checkConnection` called once).
 
-- [ ] **Step 5: Run the full unit suite** → `** TEST SUCCEEDED **`, then
+- [x] **Step 5: Run the full unit suite** → `** TEST SUCCEEDED **`, then
   `xcodebuild ... build` for the app target.
-- [ ] **Step 6: Commit** `feat: run refresh and download off the main thread with progress and cancel`.
+- [x] **Step 6: Commit** `feat: run refresh and download off the main thread with progress and cancel`.
 
 Back to the [milestone 2 plan](README.md).
