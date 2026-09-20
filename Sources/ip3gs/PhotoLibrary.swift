@@ -78,7 +78,7 @@ final class PhotoLibrary: ObservableObject {
                 progress = Double(index) / Double(pending.count)
                 statusText = "Loading \(index + 1) of \(pending.count)…"
                 thumbnails[asset.filename] = await offMain {
-                    cache.fill(asset, using: bridge).flatMap { try? Data(contentsOf: $0) }
+                    cache.fill(asset, using: bridge).flatMap { Thumbnail.data(from: $0) }
                 }
             }
             statusText = "\(assets.count) photo\(assets.count == 1 ? "" : "s") found"

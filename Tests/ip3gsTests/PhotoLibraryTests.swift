@@ -11,7 +11,7 @@ private final class FakeBridge: DeviceBridging, @unchecked Sendable {
     var assets: [PhotoAsset] = []
     var downloadResults: [String: Bool] = [:]
     var downloadDelay: TimeInterval = 0
-    let payload = Data([0x01])
+    let payload = makeJPEG(width: 400, height: 300)
 
     var downloadCounts: [String: Int] { lock.withLock { counts } }
     var totalDownloads: Int { lock.withLock { counts.values.reduce(0, +) } }
@@ -102,7 +102,8 @@ final class PhotoLibraryTests: XCTestCase {
         await library.refresh()
 
         XCTAssertEqual(library.assets, [asset("IMG_0001.JPG")])
-        XCTAssertEqual(library.thumbnails["IMG_0001.JPG"], bridge.payload)
+        let thumbnail = library.thumbnails["IMG_0001.JPG"]
+        XCTAssertNotNil(thumbnail.flatMap { NSImage(data: $0) }, "thumbnail must be a decodable image")
         XCTAssertEqual(library.statusText, "1 photo found")
         XCTAssertNil(library.progress)
     }
