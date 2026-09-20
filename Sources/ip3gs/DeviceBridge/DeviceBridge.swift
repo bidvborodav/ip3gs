@@ -10,7 +10,13 @@ final class DeviceBridge: Sendable {
     private let binDir: String
     private let runner: ProcessRunning
 
-    init(binDir: String = "Tools/bin", runner: ProcessRunning = SystemProcessRunner()) {
+    // The build copies the helpers next to the app executable; fall back to the repo path when the
+    // lookup fails (e.g. a host process that is not the app).
+    static var bundledBinDir: String {
+        Bundle.main.url(forAuxiliaryExecutable: "afcclient")?.deletingLastPathComponent().path ?? "Tools/bin"
+    }
+
+    init(binDir: String = DeviceBridge.bundledBinDir, runner: ProcessRunning = SystemProcessRunner()) {
         self.binDir = binDir
         self.runner = runner
     }
