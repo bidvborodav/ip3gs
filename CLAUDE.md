@@ -6,13 +6,57 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Hobby project: a local macOS app to browse, download, and manage the photo library on an iPhone 3GS from a modern Mac, since the current sync stack (iTunes/Photos/Image Capture) doesn't support this device anymore.
 
-The repository is currently empty — no code has been written yet.
+**Current state:** POC done (2026-09-20) and merged to `main`. The window no longer freezes: refresh and download run off the main thread with per-file progress and a Cancel button; each photo is pulled once into a cache (`~/Library/Caches/ip3gs/<udid>/`) and reused by "Download All" (measured: cold refresh 74 s + download 6 s = 80 s for 169 files, down from ~156 s); videos are not thumbnailed; both binaries are bundled into `ip3gs.app/Contents/MacOS` and link only system libraries. Verified on a real 3GS by integration tests and XCUITests, and the window was seen. Full writeup: [`docs/poc-summary.md`](docs/poc-summary.md). Still open: a *Download All* click in the real window, and the untrusted path ([`docs/research.md`](docs/research.md)). Next: [`docs/poc-summary.md`](docs/poc-summary.md#next).
 
-## Tools & Sources
+## Documentation
 
-- `xcodegen` manages the Xcode project (project.yml → .xcodeproj). Do not hand-edit the .xcodeproj; edit project.yml and regenerate.
-- `deepwiki` is the research tool of choice for understanding relevant device/protocol behavior (e.g. how iOS ~6-era devices expose photo libraries over USB/AFC) before implementing.
+Root file stays under 150 lines and points; everything else lives in `docs/`. Start at [`docs/README.md`](docs/README.md).
 
+| Document | Read it when |
+|---|---|
+| [`docs/poc-summary.md`](docs/poc-summary.md) | You want the whole POC in one page — goal, what shipped, measured results, known gaps |
+| [`docs/domain.md`](docs/domain.md) | You need to know how the device works — lockdownd, AFC, DCIM, trust/pairing |
+| [`docs/architecture.md`](docs/architecture.md) | You're about to change app code — layers, contracts, portability rule |
+| [`docs/research.md`](docs/research.md) | **Before writing device-parsing code.** Open questions and unverified assumptions |
+| [`docs/best-practices.md`](docs/best-practices.md) | Working agreements, including ones that override Claude Code defaults |
+| [`docs/experiments/`](docs/experiments/README.md) | Current POC: scope, story map, per-task briefs, execution status |
+
+Two conventions that bite if ignored: one topic per file, promoted to a directory past ~200–300 lines; and unverified device behavior is marked **[assumed]**, never stated as fact.
+
+## Commands
+
+```bash
+./Tools/setup.sh              # one-time: build libimobiledevice into Tools/bin/ (gitignored)
+./Tools/setup_test.sh         # verifies setup.sh produced working binaries (no device needed)
+xcodegen generate             # REQUIRED after clone and after any project.yml change
+xcodebuild -project ip3gs.xcodeproj -scheme ip3gs -configuration Debug build
+xcodebuild -project ip3gs.xcodeproj -scheme ip3gs -destination 'platform=macOS' test
+xcodebuild -project ip3gs.xcodeproj -scheme ip3gs -destination 'platform=macOS' test \
+  -only-testing:ip3gsTests/<TestClassName>      # single test class
+# Against a real phone (skipped otherwise): prefix with TEST_RUNNER_IP3GS_DEVICE=1
+#   ... test -only-testing:ip3gsTests/DeviceIntegrationTests   # ~80 s, prints DEVICE_REPORT timings
+#   ... test -only-testing:ip3gsUITests                        # launches the app, takes over the screen
+```
+
+`ip3gs.xcodeproj` is gitignored — it does not exist in a fresh clone. Never hand-edit it; edit `project.yml` and re-run `xcodegen generate`.
+
+### Prerequisites (met as of 2026-09-20)
+
+1. `xcode-select` points at `/Applications/Xcode-beta.app`. The scheme `ip3gs` resolves without a `scheme:` in `project.yml`.
+2. Build-time tools: `autoconf`, `automake`, `pkg-config`, and Homebrew `openssl@3` (only its static `.a` files are used; nothing from Homebrew is linked dynamically).
+3. `Tools/bin/` is gitignored, so **each worktree/clone must run `./Tools/setup.sh` itself** (~3 min, clones five upstream repos), or copy it from another checkout. The build copies both binaries into the app, so `xcodebuild` (and `xcodegen`'s file references) need `Tools/bin/` populated **before** building.
+
+`setup.sh` builds libplist → libimobiledevice-glue → libtatsu → libusbmuxd → libimobiledevice **statically**; `setup_test.sh` fails if either binary links anything outside system frameworks. Passing this gate means the binaries are portable — but see the two traps in [`docs/domain.md`](docs/domain.md#tool-interfaces-verified-from-source): `afcclient` is an interactive shell, not a subcommand CLI.
+
+`DeviceBridge` resolves the binaries from the app bundle (`Bundle.main.url(forAuxiliaryExecutable:)`), so the app runs from Finder. In `project.yml` the copy is declared **on the source entries** (`buildPhase: copyFiles` + `attributes: [CodeSignOnCopy]`); a target-level `copyFiles:` key is silently ignored by xcodegen 2.44.1.
+
+**"No global/Homebrew installs" governs the shipped tool, not the dev machine.** Installing build-time dependencies locally is fine. What must hold is that the finished app carries its own `ideviceinfo`/`afcclient`, resolves them from its own bundle rather than `$PATH`, and runs on a Mac with no Homebrew. Do **not** satisfy `Tools/bin/` by symlinking Homebrew's libimobiledevice — those link against `/opt/homebrew` dylibs and break portability. Details in [`docs/architecture.md`](docs/architecture.md#binary-resolution-and-portability).
+
+## Architecture in one breath
+
+`SwiftUI views` → `PhotoLibrary` (state + error rules) → `DeviceBridge` (device I/O) → `ProcessRunning` → vendored CLI binaries. Each layer is injectable at the boundary below it, so everything is testable with no phone attached. Full detail in [`docs/architecture.md`](docs/architecture.md).
+
+Three things that will trip you up: `DeviceBridge`'s `binDir`/`runner` are `private`, so new methods go **inside** the class body, never in an extension; there are no modals or alerts anywhere, every state is one status-bar string (plus a progress bar while busy); `PhotoLibrary` is `@MainActor` and runs each blocking bridge call off the main thread, one at a time — never call the bridge from the main actor; and the untrusted-device path is only partly confirmed on hardware (one real `-21`, see `docs/research.md`).
 
 ## Atomic Commits
 After completing each task, create a git commit immediately. Do not batch multiple tasks into a single commit.
@@ -53,7 +97,7 @@ You are the most expensive tier. Your comparative advantage is decomposition, ju
 
 **Verify, then commit:** never accept a subagent's self-report as done. Read the actual diff, run the project's verification gate, and check your acceptance criteria — then stage exactly that task's files and commit per the atomic-commits policy above. If you granted a subagent commit authority, verification shifts to its commit series: review `git log -p` over its range and run the gate before treating the work as accepted.
 
-## Notes for future sessions
+## Housekeeping
 
-- Update this file once real structure exists: build/run commands, how xcodegen is invoked, module layout, and how the app talks to the device.
-
+- Stash entry `stash@{0}` ("WIP on poc/photo-browser: 4dbd3f9") is left over from an interrupted step and has never been inspected. Look before dropping.
+- `poc/photo-browser` is not merged to `main`.

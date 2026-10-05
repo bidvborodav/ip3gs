@@ -15,6 +15,17 @@ targets:
     platform: macOS
     sources:
       - path: Sources/ip3gs
+      # Vendored helpers land next to the app executable (Contents/MacOS), re-signed with the app.
+      - path: Tools/bin/ideviceinfo
+        buildPhase:
+          copyFiles:
+            destination: executables
+        attributes: [CodeSignOnCopy]
+      - path: Tools/bin/afcclient
+        buildPhase:
+          copyFiles:
+            destination: executables
+        attributes: [CodeSignOnCopy]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.borodavchuk.ip3gs.app
@@ -24,5 +35,12 @@ targets:
     platform: macOS
     sources:
       - path: Tests/ip3gsTests
+    dependencies:
+      - target: ip3gs
+  ip3gsUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - path: Tests/ip3gsUITests
     dependencies:
       - target: ip3gs
