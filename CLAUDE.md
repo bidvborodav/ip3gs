@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Hobby project: a local macOS app to browse, download, and manage the photo library on an iPhone 3GS from a modern Mac, since the current sync stack (iTunes/Photos/Image Capture) doesn't support this device anymore.
 
-**Current state:** POC milestone 2 ("usable POC") implemented (2026-09-20) on branch `poc/milestone-2-usable`, cut from `worktree-poc-milestone-1` (milestone 1, itself cut from `poc/photo-browser`; neither is merged). The window no longer freezes: refresh and download run off the main thread with per-file progress and a Cancel button; each photo is pulled once into a cache (`~/Library/Caches/ip3gs/<udid>/`) and reused by "Download All" (measured: cold refresh 74 s + download 6 s = 80 s for 169 files, down from ~156 s); videos are not thumbnailed; both binaries are bundled into `ip3gs.app/Contents/MacOS` and link only system libraries. Verified on a real 3GS by integration tests and XCUITests, and the window was seen. Still open: a *Download All* click in the real window, and the untrusted path ([`docs/research.md`](docs/research.md)). Next: [`docs/experiments/README.md`](docs/experiments/README.md#next-step).
+**Current state:** POC done (2026-09-20) and merged to `main`. The window no longer freezes: refresh and download run off the main thread with per-file progress and a Cancel button; each photo is pulled once into a cache (`~/Library/Caches/ip3gs/<udid>/`) and reused by "Download All" (measured: cold refresh 74 s + download 6 s = 80 s for 169 files, down from ~156 s); videos are not thumbnailed; both binaries are bundled into `ip3gs.app/Contents/MacOS` and link only system libraries. Verified on a real 3GS by integration tests and XCUITests, and the window was seen. Full writeup: [`docs/poc-summary.md`](docs/poc-summary.md). Still open: a *Download All* click in the real window, and the untrusted path ([`docs/research.md`](docs/research.md)). Next: [`docs/poc-summary.md`](docs/poc-summary.md#next).
 
 ## Documentation
 
@@ -14,6 +14,7 @@ Root file stays under 150 lines and points; everything else lives in `docs/`. St
 
 | Document | Read it when |
 |---|---|
+| [`docs/poc-summary.md`](docs/poc-summary.md) | You want the whole POC in one page — goal, what shipped, measured results, known gaps |
 | [`docs/domain.md`](docs/domain.md) | You need to know how the device works — lockdownd, AFC, DCIM, trust/pairing |
 | [`docs/architecture.md`](docs/architecture.md) | You're about to change app code — layers, contracts, portability rule |
 | [`docs/research.md`](docs/research.md) | **Before writing device-parsing code.** Open questions and unverified assumptions |
